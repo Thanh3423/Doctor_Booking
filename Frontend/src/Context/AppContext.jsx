@@ -1,3 +1,4 @@
+
 import React, { createContext, useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
@@ -18,7 +19,6 @@ export const AppContextProvider = ({ children }) => {
     const [doctorsFetched, setDoctorsFetched] = useState(false);
     const [specialtiesFetched, setSpecialtiesFetched] = useState(false);
 
-    // Sync token and userData from localStorage
     useEffect(() => {
         const storedToken = localStorage.getItem("token");
         const storedUserData = localStorage.getItem("userData");
@@ -47,16 +47,24 @@ export const AppContextProvider = ({ children }) => {
                 toast.error("Yêu cầu ID bác sĩ");
                 return null;
             }
+            const cleanDocId = docId.trim(); // Ensure no whitespace
+            console.log('[getDoctorData] Cleaned docId:', cleanDocId);
+            if (!cleanDocId.match(/^[0-9a-fA-F]{24}$/)) {
+                console.warn('[getDoctorData] Invalid docId format:', cleanDocId);
+                toast.error("ID bác sĩ không hợp lệ");
+                return null;
+            }
             try {
-                console.log(`[getDoctorData] Fetching doctor data for ID: ${docId}`);
-                const doctor = allDoctors.find((doc) => String(doc._id) === String(docId));
+                console.log(`[getDoctorData] Fetching doctor data for ID: ${cleanDocId}`);
+                // Check if doctor exists in allDoctors
+                const doctor = allDoctors.find((doc) => String(doc._id) === String(cleanDocId));
                 if (doctor) {
                     console.log(`[getDoctorData] Found doctor in allDoctors:`, doctor);
                     setDoctor(doctor);
                     return doctor;
                 }
-                const { data } = await axios.get(`${backEndUrl}/doctor/public-profile/${docId}`);
-                console.log(`[getDoctorData] API response for doctor ${docId}:`, data);
+                const { data } = await axios.get(`${backEndUrl}/doctor/public-profile/${cleanDocId}`);
+                console.log(`[getDoctorData] API response for doctor ${cleanDocId}:`, data);
                 if (data.success && data.data) {
                     setDoctor(data.data);
                     setAllDoctors((prev) => {
@@ -75,6 +83,7 @@ export const AppContextProvider = ({ children }) => {
                     message: error.message,
                     response: error.response?.data,
                     status: error.response?.status,
+                    cleanDocId,
                 });
                 toast.error(error.response?.data?.message || "Lỗi khi tải hồ sơ bác sĩ");
                 setDoctor(null);
@@ -128,7 +137,22 @@ export const AppContextProvider = ({ children }) => {
             const { data } = await axios.get(`${backEndUrl}/doctor/public-all`);
             console.log('[allDoctorsList] API response for doctors list:', data);
             if (data.success && Array.isArray(data.data)) {
-                setAllDoctors(data.data);
+                // Sanitize doctor IDs
+                const sanitizedDoctors = data.data.filter((doc) => {
+                    const isValidId = doc._id && /^[0-9a-fA-F]{24}$/.test(String(doc._id));
+                    if (!isValidId) {
+                        console.warn('[allDoctorsList] Invalid doctor ID:', doc._id);
+                    }
+                    return isValidId;
+                });
+                console.log(
+                    '[allDoctorsList] Sanitized Doctor IDs:',
+                    sanitizedDoctors.map((doc) => ({
+                        _id: doc._id,
+                        name: doc.name,
+                    }))
+                );
+                setAllDoctors(sanitizedDoctors);
                 setDoctorsFetched(true);
             } else {
                 console.warn('[allDoctorsList] API error:', data.message);

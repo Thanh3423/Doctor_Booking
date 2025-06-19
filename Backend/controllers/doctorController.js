@@ -7,7 +7,6 @@ const reviewModel = require("../models/review.model");
 const appointmentModel = require("../models/appointment.model");
 const scheduleModel = require("../models/schedule.model");
 const medicalHistoryModel = require("../models/medicalHistory.model");
-const moment = require("moment-timezone");
 
 const loginDoctor = async (req, res) => {
   try {
@@ -232,7 +231,7 @@ const getMyAppointments = async (req, res) => {
 const updateAppointment = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, notes } = req.body;
+    const { status, appointmentDate, timeslot, notes } = req.body;
     const doctorId = req.user?.id;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -252,17 +251,14 @@ const updateAppointment = async (req, res) => {
       return res.status(403).json({ success: false, message: "Không được phép: Bạn chỉ có thể cập nhật lịch hẹn của mình." });
     }
 
-    if (appointment.status !== "pending") {
-      return res.status(400).json({ success: false, message: "Chỉ có thể cập nhật trạng thái cho lịch hẹn đang chờ." });
+    const validStatuses = ["pending", "completed", "cancelled"];
+    if (status && !validStatuses.includes(status.toLowerCase())) {
+      return res.status(400).json({ success: false, message: "Trạng thái không hợp lệ." });
     }
 
-    const validStatuses = ["completed", "cancelled"];
-    if (!status || !validStatuses.includes(status.toLowerCase())) {
-      return res.status(400).json({ success: false, message: "Trạng thái không hợp lệ. Chỉ có thể chọn 'completed' hoặc 'cancelled'." });
-    }
-
-    const updateData = { status: status.toLowerCase() };
-    if (notes && notes.trim()) updateData.notes = notes.trim();
+    const updateData = {};
+    if (status) updateData.status = status.toLowerCase();
+    if (notes) updateData.notes = notes.trim();
 
     const updatedAppointment = await appointmentModel.findByIdAndUpdate(id, updateData, {
       new: true,
@@ -473,28 +469,16 @@ const changePassword = async (req, res) => {
 const getMySchedule = async (req, res) => {
   try {
     const doctorId = req.user?.id;
-    const { weekStartDate } = req.query;
-
     if (!doctorId) {
       return res.status(401).json({ success: false, message: 'Không được phép: Thiếu ID bác sĩ.' });
     }
 
-    let query = { doctorId: new mongoose.Types.ObjectId(doctorId) };
-
-    if (weekStartDate) {
-      const startDate = moment.tz(weekStartDate, 'Asia/Ho_Chi_Minh').startOf('week').toDate();
-      query.weekStartDate = startDate;
-    } else {
-      const currentWeekStart = moment.tz('Asia/Ho_Chi_Minh').startOf('week').toDate();
-      query.weekStartDate = currentWeekStart;
-    }
-
     const schedule = await scheduleModel
-      .findOne(query)
+      .findOne({ doctorId: new mongoose.Types.ObjectId(doctorId) })
       .populate('doctorId', 'name email');
 
     if (!schedule) {
-      return res.status(200).json({ success: true, data: null, message: 'Không tìm thấy lịch làm việc cho tuần này.' });
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lịch làm việc.' });
     }
 
     res.status(200).json({ success: true, data: schedule });
@@ -523,9 +507,18 @@ const getPublicDoctors = async (req, res) => {
 };
 
 const getPublicDoctorData = async (req, res) => {
+  const doctorId = req.params.doctorId; // Define doctorId outside try-catch
   try {
-    const { doctorId } = req.params;
+    console.log('[getPublicDoctorData] Received doctorId:', doctorId);
+    console.log('[getPublicDoctorData] doctorId details:', {
+      raw: doctorId,
+      length: doctorId?.length,
+      isHex: /^[0-9a-fA-F]{24}$/.test(doctorId),
+      isValidObjectId: mongoose.Types.ObjectId.isValid(doctorId),
+    });
+
     if (!mongoose.Types.ObjectId.isValid(doctorId)) {
+      console.warn('[getPublicDoctorData] Invalid doctorId:', doctorId);
       return res.status(400).json({ success: false, message: 'ID bác sĩ không hợp lệ' });
     }
 
@@ -535,6 +528,7 @@ const getPublicDoctorData = async (req, res) => {
       .populate('specialty', 'name');
 
     if (!doctor) {
+      console.log('[getPublicDoctorData] Doctor not found for ID:', doctorId);
       return res.status(404).json({ success: false, message: 'Bác sĩ không tồn tại' });
     }
 
@@ -545,11 +539,16 @@ const getPublicDoctorData = async (req, res) => {
 
     res.status(200).json({ success: true, data: transformedDoctor });
   } catch (error) {
-    console.error('Error fetching doctor profile:', error);
+    console.error('[getPublicDoctorData] Error fetching doctor profile:', {
+      message: error.message,
+      stack: error.stack,
+      doctorId: doctorId || 'undefined', // Use defined doctorId
+    });
     res.status(500).json({ success: false, message: 'Lỗi máy chủ', error: error.message });
   }
 };
 
+// New Medical History Functions
 const createMedicalHistory = async (req, res) => {
   try {
     const { appointmentId, diagnosis, treatment } = req.body;
@@ -628,17 +627,12 @@ const getMedicalHistoryByPatient = async (req, res) => {
       return res.status(401).json({ success: false, message: "Không được phép: Thiếu ID bác sĩ." });
     }
 
-    let query = { doctor: doctorId };
-
-    if (patientId) {
-      if (!mongoose.Types.ObjectId.isValid(patientId)) {
-        return res.status(400).json({ success: false, message: "ID bệnh nhân không hợp lệ." });
-      }
-      query.patient = patientId;
+    if (!mongoose.Types.ObjectId.isValid(patientId)) {
+      return res.status(400).json({ success: false, message: "ID bệnh nhân không hợp lệ." });
     }
 
     const medicalHistories = await medicalHistoryModel
-      .find(query)
+      .find({ patient: patientId, doctor: doctorId })
       .populate("patient", "name email")
       .populate("doctor", "name")
       .populate("appointmentId", "appointmentDate timeslot")
@@ -771,9 +765,10 @@ const getCompletedAppointments = async (req, res) => {
       patientEmail: appt.patientId?.email || "",
       appointmentDate: appt.appointmentDate,
       timeslot: appt.timeslot,
-      hasMedicalHistory: false,
+      hasMedicalHistory: false, // Will check if medical history exists
     }));
 
+    // Check for existing medical histories
     for (let appt of formattedAppointments) {
       const medicalHistory = await medicalHistoryModel.findOne({ appointmentId: appt._id });
       appt.hasMedicalHistory = !!medicalHistory;

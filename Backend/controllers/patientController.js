@@ -1,6 +1,8 @@
+
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const moment = require('moment');
 const Joi = require('joi');
 const patientModel = require('../models/patient.model');
 const appointmentModel = require('../models/appointment.model');
@@ -64,34 +66,62 @@ const changePasswordSchema = Joi.object({
 
 // Generate JWT token
 const generateToken = (user) => {
-  return jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+  if (!user._id) {
+    throw new Error('User ID is undefined');
+  }
+  if (!process.env.JWT_KEY) {
+    throw new Error('JWT_KEY is not defined');
+  }
+  console.log('[generateToken] Generating token for user:', user._id);
+  return jwt.sign({ id: user._id }, process.env.JWT_KEY, { expiresIn: '7d' });
 };
 
 // Register user
 const registerUser = async (req, res) => {
   try {
+    console.log('[registerUser] Request body:', req.body);
     const { error } = registerSchema.validate(req.body);
-    if (error) return res.status(400).json({ success: false, message: error.details[0].message });
+    if (error) {
+      console.log('[registerUser] Validation error:', error.details[0].message);
+      return res.status(400).json({ success: false, message: error.details[0].message });
+    }
 
     const { email, password, name } = req.body;
 
     const existingUser = await patientModel.findOne({ email });
     if (existingUser) {
+      console.log('[registerUser] Email already used:', email);
       return res.status(400).json({ success: false, message: 'Email đã được sử dụng' });
     }
 
+    console.log('[registerUser] Creating new user:', email);
     const user = await patientModel.create({ email, password, name });
 
-    const token = generateToken(user);
+    let token;
+    try {
+      token = generateToken(user);
+      console.log('[registerUser] Token generated:', token);
+    } catch (tokenError) {
+      console.error('[registerUser] Token generation error:', {
+        message: tokenError.message,
+        stack: tokenError.stack,
+      });
+      return res.status(500).json({ success: false, message: `Lỗi tạo token: ${tokenError.message}` });
+    }
+
     res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' });
 
+    console.log('[registerUser] User registered successfully:', user._id);
     return res.status(201).json({
       success: true,
       message: 'Đăng ký thành công',
       data: { token, user: { id: user._id, name, email } },
     });
   } catch (error) {
-    console.error('[registerUser] Error:', error);
+    console.error('[registerUser] Error:', {
+      message: error.message,
+      stack: error.stack,
+    });
     return res.status(500).json({ success: false, message: 'Lỗi máy chủ', error: error.message });
   }
 };
@@ -99,46 +129,53 @@ const registerUser = async (req, res) => {
 // Login user
 const loginUser = async (req, res) => {
   try {
-    // Validate request body
+    console.log('[loginUser] Request body:', req.body);
     const { error } = loginSchema.validate(req.body, { abortEarly: false });
     if (error) {
       const errorMessage = error.details.map((detail) => detail.message).join(", ");
+      console.log('[loginUser] Validation error:', errorMessage);
       return res.status(400).json({ success: false, message: `Dữ liệu không hợp lệ: ${errorMessage}` });
     }
 
     const { email, password } = req.body;
 
-    // Tìm người dùng theo email
+    console.log('[loginUser] Finding user with email:', email);
     const user = await patientModel.findOne({ email }).select("+password");
     if (!user) {
+      console.log('[loginUser] User not found:', email);
       return res.status(401).json({ success: false, message: "Email không tồn tại" });
     }
 
-    // Kiểm tra mật khẩu
+    console.log('[loginUser] Comparing password for user:', user._id);
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
+      console.log('[loginUser] Password mismatch for user:', user._id);
       return res.status(401).json({ success: false, message: "Mật khẩu không đúng" });
     }
 
-    // Tạo token
+    console.log('[loginUser] Generating token for user:', user._id);
     let token;
     try {
       token = generateToken(user);
+      console.log('[loginUser] Token generated:', token);
     } catch (tokenError) {
-      console.error("[loginUser] Token generation error:", tokenError);
-      return res.status(500).json({ success: false, message: "Lỗi tạo token" });
+      console.error('[loginUser] Token generation error:', {
+        message: tokenError.message,
+        stack: tokenError.stack,
+      });
+      return res.status(500).json({ success: false, message: `Lỗi tạo token: ${tokenError.message}` });
     }
 
-    // Thiết lập cookie
+    console.log('[loginUser] Setting cookie for token');
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 ngày
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     };
     res.cookie("token", token, cookieOptions);
 
-    // Trả về phản hồi
+    console.log('[loginUser] Sending response for user:', user._id);
     return res.status(200).json({
       success: true,
       message: "Đăng nhập thành công",
@@ -152,7 +189,10 @@ const loginUser = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("[loginUser] Error:", error);
+    console.error('[loginUser] Error:', {
+      message: error.message,
+      stack: error.stack,
+    });
     return res.status(500).json({ success: false, message: "Lỗi máy chủ" });
   }
 };
@@ -281,41 +321,69 @@ const getAppointments = async (req, res) => {
 // Book appointment
 const bookAppointment = async (req, res) => {
   try {
+    console.log('[bookAppointment] Request body:', req.body);
     const { error } = bookAppointmentSchema.validate(req.body);
-    if (error) return res.status(400).json({ success: false, message: error.details[0].message });
+    if (error) {
+      console.warn('[bookAppointment] Validation error:', error.details[0].message);
+      return res.status(400).json({ success: false, message: error.details[0].message });
+    }
 
     const { doctorId, appointmentDate, timeslot, notes } = req.body;
     const patientId = req.user.id;
 
+    console.log('[bookAppointment] Parameters:', { doctorId, appointmentDate, timeslot, notes, patientId });
+
     if (!mongoose.Types.ObjectId.isValid(doctorId) || !mongoose.Types.ObjectId.isValid(patientId)) {
+      console.warn('[bookAppointment] Invalid ID:', { doctorId, patientId });
       return res.status(400).json({ success: false, message: 'ID bác sĩ hoặc bệnh nhân không hợp lệ' });
     }
 
-    const selectedDate = new Date(appointmentDate);
-    if (selectedDate < new Date()) {
+    const doctor = await doctorModel.findById(doctorId);
+    if (!doctor) {
+      console.log('[bookAppointment] Doctor not found:', doctorId);
+      return res.status(404).json({ success: false, message: 'Bác sĩ không tồn tại' });
+    }
+
+    const selectedDate = moment.tz(appointmentDate, 'YYYY-MM-DD', 'Asia/Ho_Chi_Minh').startOf('day');
+    if (selectedDate.isBefore(moment().tz('Asia/Ho_Chi_Minh').startOf('day'))) {
+      console.warn('[bookAppointment] Past date:', appointmentDate);
       return res.status(400).json({ success: false, message: 'Không thể đặt lịch hẹn trong quá khứ' });
     }
 
-    const daysMap = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
-    const dayOfWeek = daysMap[selectedDate.getDay()];
+    const startOfDay = selectedDate.clone().utc().toDate();
+    const endOfDay = selectedDate.clone().endOf('day').utc().toDate();
 
-    const schedule = await scheduleModel.findOne({ doctorId });
+    console.log('[bookAppointment] Date range:', { startOfDay, endOfDay });
+
+    const schedule = await scheduleModel.findOne({
+      doctorId: new mongoose.Types.ObjectId(doctorId),
+      'availability.date': { $gte: startOfDay, $lte: endOfDay },
+    });
+
     if (!schedule) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy lịch làm việc của bác sĩ' });
-    }
-
-    const availability = schedule.availability.find((avail) => avail.day === dayOfWeek);
-    if (!availability) {
+      console.log('[bookAppointment] No schedule found for date:', appointmentDate, 'doctorId:', doctorId);
       return res.status(400).json({ success: false, message: 'Bác sĩ không làm việc vào ngày này' });
     }
 
-    const timeSlot = availability.timeSlots.find((slot) => slot.time === timeslot);
-    if (!timeSlot || timeSlot.isBooked) {
+    const daysMap = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+    const dayOfWeek = daysMap[selectedDate.day()];
+    console.log('[bookAppointment] Day of week:', dayOfWeek);
+
+    const availability = schedule.availability.find(
+      (avail) => avail.day === dayOfWeek && moment(avail.date).utc().isSame(selectedDate, 'day')
+    );
+
+    if (!availability || !availability.isAvailable) {
+      console.log('[bookAppointment] No availability for day:', dayOfWeek, 'date:', appointmentDate);
+      return res.status(400).json({ success: false, message: 'Bác sĩ không làm việc vào ngày này' });
+    }
+
+    const timeSlot = availability.timeSlots.find((slot) => slot.time === timeslot && !slot.isBooked);
+    if (!timeSlot) {
+      console.warn('[bookAppointment] Invalid or booked timeslot:', timeslot);
       return res.status(400).json({ success: false, message: 'Khung giờ không hợp lệ hoặc đã được đặt' });
     }
 
-    const startOfDay = new Date(selectedDate).setHours(0, 0, 0, 0);
-    const endOfDay = new Date(selectedDate).setHours(23, 59, 59, 999);
     const existingAppointment = await appointmentModel.findOne({
       doctorId,
       appointmentDate: { $gte: startOfDay, $lte: endOfDay },
@@ -323,21 +391,24 @@ const bookAppointment = async (req, res) => {
       status: { $ne: 'cancelled' },
     });
     if (existingAppointment) {
+      console.warn('[bookAppointment] Timeslot already booked:', timeslot);
       return res.status(400).json({ success: false, message: 'Khung giờ này đã được đặt' });
     }
 
     timeSlot.isBooked = true;
-    timeSlot.patientId = patientId;
+    timeSlot.patientId = new mongoose.Types.ObjectId(patientId);
     await schedule.save();
+    console.log('[bookAppointment] Schedule updated with booked slot');
 
     const appointment = await appointmentModel.create({
-      patientId,
-      doctorId,
-      appointmentDate: selectedDate,
+      patientId: new mongoose.Types.ObjectId(patientId),
+      doctorId: new mongoose.Types.ObjectId(doctorId),
+      appointmentDate: selectedDate.toDate(),
       timeslot,
       notes: notes || '',
       status: 'pending',
     });
+    console.log('[bookAppointment] Appointment created:', appointment._id);
 
     return res.status(201).json({
       success: true,
@@ -345,7 +416,14 @@ const bookAppointment = async (req, res) => {
       data: appointment,
     });
   } catch (error) {
-    console.error('[bookAppointment] Error:', error);
+    console.error('[bookAppointment] Detailed Error:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      name: error.name,
+      request: req.body,
+      patientId,
+    });
     if (error.code === 11000) {
       return res.status(400).json({ success: false, message: 'Khung giờ này đã được đặt' });
     }
@@ -413,7 +491,7 @@ const cancelAppointment = async (req, res) => {
   }
 };
 
-
+// Get appointment by ID
 const getAppointmentById = async (req, res) => {
   try {
     const appointmentId = req.params.id;
@@ -441,6 +519,7 @@ const getAppointmentById = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Lỗi lấy chi tiết lịch hẹn', error: error.message });
   }
 };
+
 // Submit review
 const submitReview = async (req, res) => {
   try {
@@ -592,36 +671,104 @@ const changePassword = async (req, res) => {
   }
 };
 
+// Get public doctor data
+const getPublicDoctorData = async (req, res) => {
+  try {
+    const doctorId = req.params.doctorId || req.params.id; // Support both :doctorId and :id
+    console.log('[getPublicDoctorData] Received doctorId:', doctorId);
+
+    if (!doctorId) {
+      console.warn('[getPublicDoctorData] No doctorId provided in request');
+      return res.status(400).json({ success: false, message: 'ID bác sĩ không được cung cấp' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(doctorId)) {
+      console.warn('[getPublicDoctorData] Invalid doctorId format:', doctorId);
+      return res.status(400).json({ success: false, message: 'ID bác sĩ không hợp lệ' });
+    }
+
+    const doctor = await doctorModel
+      .findById(doctorId)
+      .select('name specialty image')
+      .populate('specialty', 'name');
+
+    if (!doctor) {
+      console.log('[getPublicDoctorData] Doctor not found for ID:', doctorId);
+      return res.status(404).json({ success: false, message: 'Bác sĩ không tồn tại' });
+    }
+
+    const transformedDoctor = {
+      ...doctor.toObject(),
+      specialty: doctor.specialty?.name || doctor.specialty || 'Không xác định',
+    };
+
+    res.status(200).json({ success: true, data: transformedDoctor });
+  } catch (error) {
+    console.error('[getPublicDoctorData] Error fetching doctor profile:', {
+      message: error.message,
+      stack: error.stack,
+      doctorId,
+    });
+    res.status(500).json({ success: false, message: 'Lỗi máy chủ', error: error.message });
+  }
+};
+
 // Get available slots
 const getAvailableSlots = async (req, res) => {
   try {
     const { docId } = req.params;
     const { date } = req.query;
+    console.log('[getAvailableSlots] Request:', { docId, date });
 
     if (!mongoose.Types.ObjectId.isValid(docId)) {
+      console.warn('[getAvailableSlots] Invalid docId:', docId);
       return res.status(400).json({ success: false, message: 'ID bác sĩ không hợp lệ' });
     }
 
-    if (!date || isNaN(new Date(date))) {
+    if (!date || !moment(date, 'YYYY-MM-DD', true).isValid()) {
+      console.warn('[getAvailableSlots] Invalid date:', date);
       return res.status(400).json({ success: false, message: 'Ngày không hợp lệ' });
     }
 
-    const selectedDate = new Date(date);
-    const daysMap = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
-    const dayOfWeek = daysMap[selectedDate.getDay()];
-
-    const schedule = await scheduleModel.findOne({ doctorId: docId });
-    if (!schedule) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy lịch làm việc của bác sĩ' });
+    const doctor = await doctorModel.findById(docId);
+    if (!doctor) {
+      console.log('[getAvailableSlots] Doctor not found:', docId);
+      return res.status(404).json({ success: false, message: 'Bác sĩ không tồn tại' });
     }
 
-    const availability = schedule.availability.find((avail) => avail.day === dayOfWeek);
-    if (!availability) {
+    const selectedDate = moment.tz(date, 'YYYY-MM-DD', 'Asia/Ho_Chi_Minh').startOf('day');
+    const startOfDay = selectedDate.clone().utc().toDate();
+    const endOfDay = selectedDate.clone().endOf('day').utc().toDate();
+
+    console.log('[getAvailableSlots] Date range:', { startOfDay, endOfDay });
+
+    const schedule = await scheduleModel.findOne({
+      doctorId: new mongoose.Types.ObjectId(docId),
+      'availability.date': { $gte: startOfDay, $lte: endOfDay },
+    });
+
+    if (!schedule) {
+      console.log('[getAvailableSlots] No schedule found for date:', date, 'doctorId:', docId);
       return res.status(200).json({ success: true, data: [], message: 'Bác sĩ không làm việc vào ngày này' });
     }
 
-    const startOfDay = new Date(selectedDate).setHours(0, 0, 0, 0);
-    const endOfDay = new Date(selectedDate).setHours(23, 59, 59, 999);
+    console.log('[getAvailableSlots] Schedule found:', schedule.availability);
+
+    const daysMap = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+    const dayOfWeek = daysMap[moment.tz(date, 'Asia/Ho_Chi_Minh').day()];
+    console.log('[getAvailableSlots] Day of week:', dayOfWeek);
+
+    const availability = schedule.availability.find(
+      (avail) => avail.day === dayOfWeek && moment(avail.date).utc().isSame(selectedDate, 'day')
+    );
+
+    if (!availability || !availability.isAvailable) {
+      console.log('[getAvailableSlots] No availability for day:', dayOfWeek, 'date:', date, 'availability:', availability);
+      return res.status(200).json({ success: true, data: [], message: 'Bác sĩ không làm việc vào ngày này' });
+    }
+
+    console.log('[getAvailableSlots] Availability found:', availability);
+
     const bookedSlots = await appointmentModel
       .find({
         doctorId: docId,
@@ -631,17 +778,25 @@ const getAvailableSlots = async (req, res) => {
       .select('timeslot');
 
     const bookedTimes = bookedSlots.map((slot) => slot.timeslot);
+    console.log('[getAvailableSlots] Booked times:', bookedTimes);
+
     const availableSlots = availability.timeSlots
-      .filter((slot) => !bookedTimes.includes(slot.time) && !slot.isBooked)
+      .filter((slot) => !bookedTimes.includes(slot.time) && !slot.isBooked && slot.isAvailable)
       .map((slot) => ({ time: slot.time }));
 
+    console.log('[getAvailableSlots] Available slots:', availableSlots);
     return res.status(200).json({
       success: true,
       message: availableSlots.length ? 'Lấy khung giờ thành công' : 'Không có khung giờ trống',
       data: availableSlots,
     });
   } catch (error) {
-    console.error('[getAvailableSlots] Error:', error);
+    console.error('[getAvailableSlots] Error:', {
+      message: error.message,
+      stack: error.stack,
+      docId,
+      date,
+    });
     return res.status(500).json({ success: false, message: 'Lỗi lấy khung giờ', error: error.message });
   }
 };
@@ -686,6 +841,7 @@ module.exports = {
   completeAppointment,
   getAllPatients,
   changePassword,
+  getPublicDoctorData,
   getAvailableSlots,
   getMedicalHistory,
 };

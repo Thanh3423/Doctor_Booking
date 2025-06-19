@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useContext, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -89,11 +90,23 @@ function DoctorCard() {
       navigate("/login");
       return;
     }
+    if (!doctorId.match(/^[0-9a-fA-F]{24}$/)) {
+      toast.error("ID bác sĩ không hợp lệ");
+      return;
+    }
     navigate(`/appointment/${doctorId}`);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   useEffect(() => {
+    console.log(
+      '[DoctorCard] Doctor IDs in allDoctors:',
+      allDoctors.map((doc) => ({
+        _id: doc._id,
+        name: doc.name,
+        rawId: JSON.stringify(doc._id),
+      }))
+    );
     if (allDoctors.length > 0 && !ratingsFetched) {
       fetchAndIntegrateRatings();
     } else if (allDoctors.length === 0) {

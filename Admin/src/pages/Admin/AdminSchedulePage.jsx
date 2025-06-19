@@ -4,9 +4,8 @@ import { AdminContext } from '../../context/AdminContext';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import moment from 'moment-timezone';
-import 'moment/locale/vi'; // Import Vietnamese locale
+import 'moment/locale/vi';
 
-// Set moment to use Vietnamese locale
 moment.locale('vi');
 
 const AdminSchedulePage = () => {
@@ -21,20 +20,25 @@ const AdminSchedulePage = () => {
     const [selectedSchedule, setSelectedSchedule] = useState(null);
     const [filterWeek, setFilterWeek] = useState(moment().tz('Asia/Ho_Chi_Minh').startOf('week').format('YYYY-MM-DD'));
     const [filterMonth, setFilterMonth] = useState(moment().tz('Asia/Ho_Chi_Minh').format('YYYY-MM'));
+
     const { aToken, backendUrl } = useContext(AdminContext);
+
+    // Initialize availability with correct day names and dates
+    const initializeAvailability = (weekStart) => {
+        const daysMap = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+        return daysMap.map((day, index) => ({
+            day,
+            date: moment.tz(weekStart, 'Asia/Ho_Chi_Minh').startOf('week').add(index, 'days').toDate(),
+            timeSlots: [],
+            inputValue: '',
+            isAvailable: true,
+        }));
+    };
 
     const [formData, setFormData] = useState({
         doctorId: '',
         weekStartDate: moment().tz('Asia/Ho_Chi_Minh').startOf('week').format('YYYY-MM-DD'),
-        availability: [
-            { day: 'Thứ 2', date: '', timeSlots: [], inputValue: '', isAvailable: true },
-            { day: 'Thứ 3', date: '', timeSlots: [], inputValue: '', isAvailable: true },
-            { day: 'Thứ 4', date: '', timeSlots: [], inputValue: '', isAvailable: true },
-            { day: 'Thứ 5', date: '', timeSlots: [], inputValue: '', isAvailable: true },
-            { day: 'Thứ 6', date: '', timeSlots: [], inputValue: '', isAvailable: true },
-            { day: 'Thứ 7', date: '', timeSlots: [], inputValue: '', isAvailable: true },
-            { day: 'Chủ nhật', date: '', timeSlots: [], inputValue: '', isAvailable: true },
-        ],
+        availability: initializeAvailability(moment().tz('Asia/Ho_Chi_Minh').startOf('week')),
     });
 
     useEffect(() => {
@@ -72,7 +76,7 @@ const AdminSchedulePage = () => {
 
     const handleAvailabilityToggle = (day) => {
         const updatedAvailability = formData.availability.map(item =>
-            item.day === day ? { ...item, isAvailable: !item.isAvailable, timeSlots: [] } : item
+            item.day === day ? { ...item, isAvailable: !item.isAvailable, timeSlots: [], inputValue: '' } : item
         );
         setFormData({ ...formData, availability: updatedAvailability });
     };
@@ -98,34 +102,23 @@ const AdminSchedulePage = () => {
     };
 
     const handleWeekChange = (e) => {
-        const weekStart = moment(e.target.value).tz('Asia/Ho_Chi_Minh').startOf('week');
-        const updatedAvailability = formData.availability.map((item, index) => {
-            const date = moment(weekStart).add(index, 'days').toDate();
-            return { ...item, date };
-        });
+        const weekStart = moment.tz(e.target.value, 'Asia/Ho_Chi_Minh').startOf('week');
+        const updatedAvailability = initializeAvailability(weekStart);
         setFormData({ ...formData, weekStartDate: e.target.value, availability: updatedAvailability });
         setFilterWeek(e.target.value);
-        setFilterMonth(moment(e.target.value).format('YYYY-MM'));
+        setFilterMonth(weekStart.format('YYYY-MM'));
     };
 
     const handleMonthChange = (e) => {
         setFilterMonth(e.target.value);
-        setFilterWeek(moment(e.target.value).startOf('month').startOf('week').format('YYYY-MM-DD'));
+        setFilterWeek(moment.tz(e.target.value, 'Asia/Ho_Chi_Minh').startOf('month').startOf('week').format('YYYY-MM-DD'));
     };
 
     const resetForm = () => {
         setFormData({
             doctorId: '',
             weekStartDate: moment().tz('Asia/Ho_Chi_Minh').startOf('week').format('YYYY-MM-DD'),
-            availability: [
-                { day: 'Thứ 2', date: '', timeSlots: [], inputValue: '', isAvailable: true },
-                { day: 'Thứ 3', date: '', timeSlots: [], inputValue: '', isAvailable: true },
-                { day: 'Thứ 4', date: '', timeSlots: [], inputValue: '', isAvailable: true },
-                { day: 'Thứ 5', date: '', timeSlots: [], inputValue: '', isAvailable: true },
-                { day: 'Thứ 6', date: '', timeSlots: [], inputValue: '', isAvailable: true },
-                { day: 'Thứ 7', date: '', timeSlots: [], inputValue: '', isAvailable: true },
-                { day: 'Chủ nhật', date: '', timeSlots: [], inputValue: '', isAvailable: true },
-            ],
+            availability: initializeAvailability(moment().tz('Asia/Ho_Chi_Minh').startOf('week')),
         });
     };
 
@@ -141,6 +134,20 @@ const AdminSchedulePage = () => {
                     }
                 }
             }
+            // Validate that day matches date
+            const expectedDay = moment.tz(item.date, 'Asia/Ho_Chi_Minh').format('dddd');
+            const daysMap = {
+                'Monday': 'Thứ 2',
+                'Tuesday': 'Thứ 3',
+                'Wednesday': 'Thứ 4',
+                'Thursday': 'Thứ 5',
+                'Friday': 'Thứ 6',
+                'Saturday': 'Thứ 7',
+                'Sunday': 'Chủ nhật',
+            };
+            if (daysMap[expectedDay] !== item.day) {
+                return `Ngày ${item.day} không khớp với ngày thực tế ${moment(item.date).format('DD/MM/YYYY')}`;
+            }
         }
         return null;
     };
@@ -155,7 +162,7 @@ const AdminSchedulePage = () => {
             return;
         }
         try {
-            const weekStart = moment(formData.weekStartDate).tz('Asia/Ho_Chi_Minh').startOf('week');
+            const weekStart = moment.tz(formData.weekStartDate, 'Asia/Ho_Chi_Minh').startOf('week');
             const payload = {
                 doctorId: formData.doctorId,
                 weekStartDate: weekStart.toDate(),
@@ -163,7 +170,7 @@ const AdminSchedulePage = () => {
                 year: weekStart.year(),
                 availability: formData.availability.map((item, index) => ({
                     day: item.day,
-                    date: moment(weekStart).add(index, 'days').toDate(),
+                    date: moment.tz(weekStart, 'Asia/Ho_Chi_Minh').add(index, 'days').startOf('day').toDate(),
                     isAvailable: item.isAvailable,
                     timeSlots: item.isAvailable ? item.timeSlots : [],
                 })),
@@ -184,13 +191,13 @@ const AdminSchedulePage = () => {
     };
 
     const openEditModal = schedule => {
-        const weekStart = moment(schedule.weekStartDate).tz('Asia/Ho_Chi_Minh').startOf('week');
+        const weekStart = moment.tz(schedule.weekStartDate, 'Asia/Ho_Chi_Minh').startOf('week');
         setFormData({
             doctorId: schedule.doctorId._id,
             weekStartDate: weekStart.format('YYYY-MM-DD'),
             availability: schedule.availability.map((item, index) => ({
                 day: item.day,
-                date: moment(weekStart).add(index, 'days').toDate(),
+                date: moment.tz(weekStart, 'Asia/Ho_Chi_Minh').add(index, 'days').startOf('day').toDate(),
                 timeSlots: item.timeSlots.map(slot => ({
                     time: slot.time,
                     isBooked: slot.isBooked,
@@ -215,14 +222,14 @@ const AdminSchedulePage = () => {
             return;
         }
         try {
-            const weekStart = moment(formData.weekStartDate).tz('Asia/Ho_Chi_Minh').startOf('week');
+            const weekStart = moment.tz(formData.weekStartDate, 'Asia/Ho_Chi_Minh').startOf('week');
             const payload = {
                 weekStartDate: weekStart.toDate(),
                 weekNumber: weekStart.week(),
                 year: weekStart.year(),
                 availability: formData.availability.map((item, index) => ({
                     day: item.day,
-                    date: moment(weekStart).add(index, 'days').toDate(),
+                    date: moment.tz(weekStart, 'Asia/Ho_Chi_Minh').add(index, 'days').startOf('day').toDate(),
                     isAvailable: item.isAvailable,
                     timeSlots: item.isAvailable ? item.timeSlots : [],
                 })),

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useContext } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -29,7 +28,7 @@ const LoginPage = () => {
       const token = localStorage.getItem("token");
       if (token) {
         try {
-          console.log("Kiểm tra token hợp lệ...");
+          console.log("[LoginPage] Checking token validity, backEndUrl:", backEndUrl);
           await axios.get(`${backEndUrl}/patient/my-profile`, {
             headers: { Authorization: `Bearer ${token}` },
             withCredentials: true,
@@ -37,7 +36,11 @@ const LoginPage = () => {
           navigate("/");
           toast.info("Bạn đã đăng nhập!");
         } catch (error) {
-          console.error("Token không hợp lệ:", error.response?.data);
+          console.error("[LoginPage] Token invalid:", {
+            status: error.response?.status,
+            data: error.response?.data,
+            message: error.message,
+          });
           localStorage.removeItem("token");
           localStorage.removeItem("userData");
           setToken("");
@@ -64,12 +67,13 @@ const LoginPage = () => {
     if (isRegister) data.name = name;
 
     try {
-      console.log("Gửi yêu cầu đến:", `${backEndUrl}${endpoint}`);
-      console.log("Dữ liệu gửi:", data);
+      console.log("[LoginPage] Sending request to:", `${backEndUrl}${endpoint}`);
+      console.log("[LoginPage] Request data:", data);
       const res = await axios.post(`${backEndUrl}${endpoint}`, data, {
         withCredentials: true,
       });
-      const { token, user } = res.data;
+      console.log("[LoginPage] Response:", res.data);
+      const { token, user } = res.data.data; // Adjusted to match backend response structure
       localStorage.setItem("token", token);
       if (user) {
         localStorage.setItem("userData", JSON.stringify(user));
@@ -79,7 +83,7 @@ const LoginPage = () => {
       navigate("/");
       toast.success(isRegister ? "Đăng ký thành công!" : "Đăng nhập thành công!");
     } catch (error) {
-      console.error("Lỗi API:", {
+      console.error("[LoginPage] API error:", {
         status: error.response?.status,
         data: error.response?.data,
         message: error.message,

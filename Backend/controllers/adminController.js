@@ -125,11 +125,11 @@ const createSchedule = async (req, res) => {
             return res.status(404).json({ message: 'Doctor not found' });
         }
 
-        const startDate = moment.tz(weekStartDate, 'Asia/Ho_Chi_Minh').startOf('week').toDate();
-        const weekNumber = moment(startDate).week();
-        const year = moment(startDate).year();
+        const startDate = moment.tz(weekStartDate, 'Asia/Ho_Chi_Minh').startOf('week').startOf('day').toDate();
+        const weekNumber = moment.tz(startDate, 'Asia/Ho_Chi_Minh').week();
+        const year = moment.tz(startDate, 'Asia/Ho_Chi_Minh').year();
 
-        // Check for existing schedule for this doctor and week
+        // Check for existing schedule
         const existingSchedule = await scheduleModel.findOne({ doctorId, weekStartDate: startDate });
         if (existingSchedule) {
             return res.status(400).json({ message: 'Schedule already exists for this doctor and week' });
@@ -137,11 +137,23 @@ const createSchedule = async (req, res) => {
 
         // Validate availability
         const validDays = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
+        const daysMap = {
+            'Monday': 'Thứ 2',
+            'Tuesday': 'Thứ 3',
+            'Wednesday': 'Thứ 4',
+            'Thursday': 'Thứ 5',
+            'Friday': 'Thứ 6',
+            'Saturday': 'Thứ 7',
+            'Sunday': 'Chủ nhật',
+        };
+
         const isValidAvailability = availability.every((slot, index) => {
-            const expectedDate = moment(startDate).add(index, 'days').toDate();
+            const expectedDate = moment.tz(startDate, 'Asia/Ho_Chi_Minh').add(index, 'days').startOf('day');
+            const actualDay = moment.tz(slot.date, 'Asia/Ho_Chi_Minh').format('dddd');
             return (
                 validDays.includes(slot.day) &&
-                moment(slot.date).isSame(expectedDate, 'day') &&
+                slot.day === daysMap[actualDay] &&
+                moment.tz(slot.date, 'Asia/Ho_Chi_Minh').isSame(expectedDate, 'day') &&
                 typeof slot.isAvailable === 'boolean' &&
                 Array.isArray(slot.timeSlots) &&
                 (slot.isAvailable
@@ -153,7 +165,7 @@ const createSchedule = async (req, res) => {
         });
 
         if (!isValidAvailability) {
-            return res.status(400).json({ message: 'Invalid availability format or data' });
+            return res.status(400).json({ message: 'Invalid availability format or day-date mismatch' });
         }
 
         const newSchedule = new scheduleModel({
@@ -163,7 +175,7 @@ const createSchedule = async (req, res) => {
             year,
             availability: availability.map((slot, index) => ({
                 day: slot.day,
-                date: moment(startDate).add(index, 'days').toDate(),
+                date: moment.tz(startDate, 'Asia/Ho_Chi_Minh').add(index, 'days').startOf('day').toDate(),
                 isAvailable: slot.isAvailable,
                 timeSlots: slot.isAvailable ? slot.timeSlots.map(ts => ({
                     time: ts.time,
@@ -204,17 +216,29 @@ const updateSchedule = async (req, res) => {
             return res.status(404).json({ message: 'Schedule not found' });
         }
 
-        const startDate = moment.tz(weekStartDate, 'Asia/Ho_Chi_Minh').startOf('week').toDate();
-        const weekNumber = moment(startDate).week();
-        const year = moment(startDate).year();
+        const startDate = moment.tz(weekStartDate, 'Asia/Ho_Chi_Minh').startOf('week').startOf('day').toDate();
+        const weekNumber = moment.tz(startDate, 'Asia/Ho_Chi_Minh').week();
+        const year = moment.tz(startDate, 'Asia/Ho_Chi_Minh').year();
 
         // Validate availability
         const validDays = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
+        const daysMap = {
+            'Monday': 'Thứ 2',
+            'Tuesday': 'Thứ 3',
+            'Wednesday': 'Thứ 4',
+            'Thursday': 'Thứ 5',
+            'Friday': 'Thứ 6',
+            'Saturday': 'Thứ 7',
+            'Sunday': 'Chủ nhật',
+        };
+
         const isValidAvailability = availability.every((slot, index) => {
-            const expectedDate = moment(startDate).add(index, 'days').toDate();
+            const expectedDate = moment.tz(startDate, 'Asia/Ho_Chi_Minh').add(index, 'days').startOf('day');
+            const actualDay = moment.tz(slot.date, 'Asia/Ho_Chi_Minh').format('dddd');
             return (
                 validDays.includes(slot.day) &&
-                moment(slot.date).isSame(expectedDate, 'day') &&
+                slot.day === daysMap[actualDay] &&
+                moment.tz(slot.date, 'Asia/Ho_Chi_Minh').isSame(expectedDate, 'day') &&
                 typeof slot.isAvailable === 'boolean' &&
                 Array.isArray(slot.timeSlots) &&
                 (slot.isAvailable
@@ -226,13 +250,13 @@ const updateSchedule = async (req, res) => {
         });
 
         if (!isValidAvailability) {
-            return res.status(400).json({ message: 'Invalid availability format or data' });
+            return res.status(400).json({ message: 'Invalid availability format or day-date mismatch' });
         }
 
         // Check for conflicts with existing appointments
         const conflictingAppointments = await appointmentModel.find({
             doctorId: schedule.doctorId._id,
-            appointmentDate: { $gte: startDate, $lte: moment(startDate).endOf('week').toDate() },
+            appointmentDate: { $gte: startDate, $lte: moment.tz(startDate, 'Asia/Ho_Chi_Minh').endOf('week').toDate() },
             timeslot: {
                 $in: availability
                     .flatMap(slot => slot.timeSlots)
@@ -251,7 +275,7 @@ const updateSchedule = async (req, res) => {
         schedule.year = year;
         schedule.availability = availability.map((slot, index) => ({
             day: slot.day,
-            date: moment(startDate).add(index, 'days').toDate(),
+            date: moment.tz(startDate, 'Asia/Ho_Chi_Minh').add(index, 'days').startOf('day').toDate(),
             isAvailable: slot.isAvailable,
             timeSlots: slot.isAvailable ? slot.timeSlots.map(ts => ({
                 time: ts.time,

@@ -10,7 +10,7 @@ const appointmentSchema = mongoose.Schema({
     match: [/^\d{2}:\d{2}-\d{2}:\d{2}$/, 'Invalid timeslot format (e.g., "10:00-10:30")'],
   },
   status: { type: String, default: 'pending', enum: ['pending', 'completed', 'cancelled'] },
-  notes: { type: String, required: false, trim: true },
+  notes: { type: String, default: '', },
   createdAt: { type: Date, default: Date.now },
 });
 

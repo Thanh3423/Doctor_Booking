@@ -836,21 +836,66 @@ const getMedicalHistory = async (req, res) => {
   try {
     const patientId = req.user.id;
     console.log('[getMedicalHistory] Fetching medical history for patientId:', patientId);
+
+    if (!mongoose.Types.ObjectId.isValid(patientId)) {
+      console.warn('[getMedicalHistory] Invalid patientId:', patientId);
+      return res.status(400).json({ success: false, message: 'ID bệnh nhân không hợp lệ' });
+    }
+
     const medicalHistory = await medicalHistoryModel
       .find({ patient: patientId })
-      .populate('doctor', 'name')
-      .populate('appointmentId', 'appointmentDate timeslot')
-      .sort({ date: -1 });
+      .populate({
+        path: 'patient',
+        select: 'name email',
+      })
+      .populate({
+        path: 'doctor',
+        select: 'name',
+      })
+      .populate({
+        path: 'appointmentId',
+        select: 'appointmentDate timeslot',
+      })
+      .sort({ date: -1 })
+      .lean();
 
+    if (!medicalHistory.length) {
+      console.log('[getMedicalHistory] No medical history found for patientId:', patientId);
+      return res.status(200).json({
+        success: true,
+        message: 'Không tìm thấy lịch sử y tế',
+        data: [],
+      });
+    }
+
+    const formattedHistory = medicalHistory.map((record) => ({
+      _id: record._id,
+      patientId: record.patient?._id || null,
+      patientName: record.patient?.name || 'Không xác định',
+      patientEmail: record.patient?.email || 'Không xác định',
+      doctorId: record.doctor?._id || null,
+      doctorName: record.doctor?.name || 'Không xác định',
+      appointmentId: record.appointmentId?._id || null,
+      appointmentDate: record.appointmentId?.appointmentDate
+        ? moment.tz(record.appointmentId.appointmentDate, 'Asia/Ho_Chi_Minh').format('YYYY-MM-DD HH:mm')
+        : 'Không xác định',
+      timeslot: record.appointmentId?.timeslot || 'Không xác định',
+      diagnosis: record.diagnosis || 'Không có thông tin',
+      treatment: record.treatment || 'Không có thông tin',
+      date: moment.tz(record.date, 'Asia/Ho_Chi_Minh').format('YYYY-MM-DD HH:mm'),
+    }));
+
+    console.log('[getMedicalHistory] Formatted medical history:', formattedHistory);
     return res.status(200).json({
       success: true,
       message: 'Lấy lịch sử y tế thành công',
-      data: { medicalHistory },
+      data: formattedHistory,
     });
   } catch (error) {
     console.error('[getMedicalHistory] Error:', {
       message: error.message,
       stack: error.stack,
+      patientId: req.user.id,
     });
     return res.status(500).json({ success: false, message: 'Lỗi lấy lịch sử y tế', error: error.message });
   }

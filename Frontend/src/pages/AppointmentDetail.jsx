@@ -5,6 +5,7 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import { StarIcon } from '@heroicons/react/24/solid';
 import { StarIcon as StarOutlineIcon } from '@heroicons/react/24/outline';
+import moment from 'moment-timezone';
 
 // Google Fonts for Vietnamese
 const fontStyle = `
@@ -29,15 +30,14 @@ const AppointmentDetail = () => {
     // Format date
     const formatDate = (dateString) => {
         try {
-            const date = new Date(dateString);
-            return date.toLocaleDateString('vi-VN', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-            });
+            if (!dateString) return 'Không xác định';
+            const date = moment.tz(dateString, 'Asia/Ho_Chi_Minh');
+            return date.isValid()
+                ? date.format('DD/MM/YYYY HH:mm')
+                : 'Ngày không hợp lệ';
         } catch (error) {
-            console.warn('[formatDate] Invalid date:', dateString);
-            return dateString || 'Không xác định';
+            console.warn('[formatDate] Invalid date:', dateString, error);
+            return 'Không xác định';
         }
     };
 
@@ -75,8 +75,8 @@ const AppointmentDetail = () => {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 console.log('[fetchData] Medical history response:', historyResponse.data);
-                if (historyResponse.data.success && Array.isArray(historyResponse.data.data?.medicalHistory)) {
-                    const relatedHistory = historyResponse.data.data.medicalHistory.filter(
+                if (historyResponse.data.success && Array.isArray(historyResponse.data.data)) {
+                    const relatedHistory = historyResponse.data.data.filter(
                         (record) => record.appointmentId?.toString() === id
                     );
                     setMedicalHistory(relatedHistory);
@@ -311,7 +311,7 @@ const AppointmentDetail = () => {
                                         </p>
                                         <p className="text-gray-700">
                                             <span className="font-medium">Bác sĩ:</span>{' '}
-                                            {record.doctor?.name || 'Không xác định'}
+                                            {record.doctorName || 'Không xác định'}
                                         </p>
                                         <p className="text-gray-700">
                                             <span className="font-medium">Chẩn đoán:</span>{' '}
@@ -320,6 +320,14 @@ const AppointmentDetail = () => {
                                         <p className="text-gray-700">
                                             <span className="font-medium">Điều trị:</span>{' '}
                                             {record.treatment || 'Không có thông tin'}
+                                        </p>
+                                        <p className="text-gray-700">
+                                            <span className="font-medium">Khung giờ:</span>{' '}
+                                            {record.timeslot || 'Không xác định'}
+                                        </p>
+                                        <p className="text-gray-700">
+                                            <span className="font-medium">Ngày hẹn:</span>{' '}
+                                            {formatDate(record.appointmentDate)}
                                         </p>
                                     </div>
                                 </div>
@@ -345,8 +353,7 @@ const AppointmentDetail = () => {
                                                 .map((_, i) => (
                                                     <StarIcon
                                                         key={i}
-                                                        className={`h-6 w-6 ${i < parseInt(review.rating) ? 'text-yellow-400' : 'text-gray-300'
-                                                            }`}
+                                                        className={`h-6 w-6 ${i < parseInt(review.rating) ? 'text-yellow-400' : 'text-gray-300'}`}
                                                     />
                                                 ))}
                                         </div>

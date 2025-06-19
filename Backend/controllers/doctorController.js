@@ -1,15 +1,77 @@
-
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
+const moment = require("moment-timezone"); // Thêm import moment-timezone
 const doctorModel = require("../models/doctor.model");
 const specialtyModel = require("../models/specialty.model");
 const reviewModel = require("../models/review.model");
 const appointmentModel = require("../models/appointment.model");
 const scheduleModel = require("../models/schedule.model");
 const medicalHistoryModel = require("../models/medicalHistory.model");
-const patientModel = require("../models/patient.model"); // Added Patient model import
+const patientModel = require("../models/patient.model");
 
+const getMySchedule = async (req, res) => {
+  try {
+    const doctorId = req.user?.id;
+    const { weekStartDate } = req.query; // Lấy weekStartDate từ query params
+
+    if (!doctorId) {
+      return res.status(401).json({ success: false, message: 'Không được phép: Thiếu ID bác sĩ.' });
+    }
+
+    if (!weekStartDate) {
+      return res.status(400).json({ success: false, message: 'Thiếu tham số weekStartDate.' });
+    }
+
+    // Chuyển đổi weekStartDate thành Date và chuẩn hóa về đầu tuần
+    const startOfWeek = moment.tz(weekStartDate, 'Asia/Ho_Chi_Minh').startOf('week').toDate();
+
+    const schedule = await scheduleModel
+      .findOne({
+        doctorId: new mongoose.Types.ObjectId(doctorId),
+        weekStartDate: startOfWeek,
+      })
+      .populate('doctorId', 'name email');
+
+    if (!schedule) {
+      return res.status(200).json({
+        success: true,
+        message: 'Không tìm thấy lịch làm việc cho tuần này.',
+        data: null,
+      });
+    }
+
+    // Format dữ liệu trả về để đảm bảo đồng nhất với frontend
+    const formattedSchedule = {
+      _id: schedule._id,
+      doctorId: schedule.doctorId,
+      weekStartDate: schedule.weekStartDate,
+      weekNumber: schedule.weekNumber,
+      year: schedule.year,
+      availability: schedule.availability.map((item) => ({
+        day: item.day,
+        date: item.date,
+        isAvailable: item.isAvailable,
+        timeSlots: item.timeSlots.map((slot) => ({
+          _id: slot._id,
+          time: slot.time,
+          isBooked: slot.isBooked,
+          isAvailable: slot.isAvailable,
+          patientId: slot.patientId,
+        })),
+      })),
+      createdAt: schedule.createdAt,
+      updatedAt: schedule.updatedAt,
+    };
+
+    res.status(200).json({ success: true, data: formattedSchedule });
+  } catch (error) {
+    console.error('Lỗi khi lấy lịch làm việc:', error);
+    res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+  }
+};
+
+// Các hàm khác giữ nguyên
 const loginDoctor = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -467,28 +529,6 @@ const changePassword = async (req, res) => {
   } catch (error) {
     console.error("Lỗi khi đổi mật khẩu:", error.message, error.stack);
     res.status(500).json({ message: "Lỗi server", error: error.message });
-  }
-};
-
-const getMySchedule = async (req, res) => {
-  try {
-    const doctorId = req.user?.id;
-    if (!doctorId) {
-      return res.status(401).json({ success: false, message: 'Không được phép: Thiếu ID bác sĩ.' });
-    }
-
-    const schedule = await scheduleModel
-      .findOne({ doctorId: new mongoose.Types.ObjectId(doctorId) })
-      .populate('doctorId', 'name email');
-
-    if (!schedule) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy lịch làm việc.' });
-    }
-
-    res.status(200).json({ success: true, data: schedule });
-  } catch (error) {
-    console.error('Lỗi khi lấy lịch làm việc:', error);
-    res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
   }
 };
 

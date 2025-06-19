@@ -40,11 +40,16 @@ const patientSchema = mongoose.Schema({
             ref: "Review",
         },
     ],
-
     appointment: [
         {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "Apointment",
+            ref: "Appointment",
+        },
+    ],
+    medicalHistory: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "medicalHistory", // Tham chiếu đến model medicalHistory
         },
     ],
     createdAt: {
@@ -54,8 +59,8 @@ const patientSchema = mongoose.Schema({
 });
 
 // Ensure indexes are created properly
-patientSchema.index({ "medicalHistory.doctor": 1 });
 patientSchema.index({ reviews: 1 });
 patientSchema.index({ appointment: 1 });
+patientSchema.index({ medicalHistory: 1 }); // Thêm index cho medicalHistory
 
 module.exports = mongoose.model("Patient", patientSchema);

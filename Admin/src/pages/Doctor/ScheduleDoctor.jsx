@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useContext } from 'react';
 import { Calendar, CheckCircle, XCircle } from 'lucide-react';
 import { DoctorContext } from '../../context/DoctorContext';
@@ -78,7 +77,6 @@ const DoctorSchedulePage = () => {
                         <Calendar size={28} className="text-teal-600" />
                         Lịch làm việc cá nhân
                     </h1>
-
                 </div>
 
                 <div className="mb-6">
@@ -108,7 +106,7 @@ const DoctorSchedulePage = () => {
                                 className="p-5 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
                             >
                                 <h4 className="text-base font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                                    <span>{item.day} ({moment(item.date).format('DD/MM/YYYY')})</span>
+                                    <span>{item.day} ({moment(item.date).tz('Asia/Ho_Chi_Minh').format('DD/MM/YYYY')})</span>
                                     {item.isAvailable ? (
                                         <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
                                             Làm việc ({item.timeSlots.length} khung giờ)
@@ -149,9 +147,6 @@ const DoctorSchedulePage = () => {
                                 )}
                             </div>
                         ))}
-                        <div className="flex justify-end mt-6">
-
-                        </div>
                     </div>
                 )}
             </div>

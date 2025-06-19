@@ -1,4 +1,3 @@
-
 const express = require('express');
 const router = express.Router();
 const {
@@ -22,7 +21,7 @@ const {
     getMySchedule,
     changePassword,
     createMedicalHistory,
-    getAllMedicalHistories, // New import
+    getAllMedicalHistories,
     getMedicalHistoryByPatient,
     updateMedicalHistory,
     deleteMedicalHistory,
@@ -52,7 +51,7 @@ router.put('/upload-image/:id', doctorAuth, upload.single('image'), uploadImage)
 router.get('/my-schedule', doctorAuth, getMySchedule);
 router.post('/change-password', doctorAuth, changePassword);
 router.post('/medical-history', doctorAuth, createMedicalHistory);
-router.get('/medical-history', doctorAuth, getAllMedicalHistories); // Updated route
+router.get('/medical-history', doctorAuth, getAllMedicalHistories);
 router.get('/medical-history/:patientId', doctorAuth, getMedicalHistoryByPatient);
 router.put('/medical-history/:id', doctorAuth, updateMedicalHistory);
 router.delete('/medical-history/:id', doctorAuth, deleteMedicalHistory);

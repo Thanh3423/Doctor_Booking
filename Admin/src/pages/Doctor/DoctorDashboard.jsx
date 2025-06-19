@@ -4,6 +4,7 @@ import axios from "axios";
 import { AppContext } from "../../context/AppContext";
 import { DoctorContext } from "../../context/DoctorContext";
 import { toast } from "react-toastify";
+import moment from "moment-timezone";
 
 const SimpleCard = ({ title, count, icon, color }) => (
   <div className="bg-white bg-opacity-80 backdrop-blur-md p-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 animate-fade-in">
@@ -100,6 +101,23 @@ const DoctorDashboard = () => {
 
   const latestAppointments = appointments.slice(-4).reverse();
 
+  // Format date and timeslot
+  const formatDateTime = (date, timeslot) => {
+    try {
+      if (!date || !timeslot) return "N/A";
+      const momentDate = moment.tz(date, "Asia/Ho_Chi_Minh");
+      if (!momentDate.isValid()) throw new Error("Invalid date");
+
+      const [startTime] = timeslot.split("-"); // e.g., "09:00-10:00" -> "09:00"
+      if (!startTime.match(/^\d{2}:\d{2}$/)) throw new Error("Invalid timeslot format");
+
+      return momentDate.format("DD/MM/YYYY") + " " + startTime;
+    } catch (error) {
+      console.warn("Date formatting error:", error.message, { date, timeslot });
+      return "N/A";
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-50 p-6">
       <h1 className="text-3xl font-bold text-gray-800 mb-8 animate-fade-in">Bảng Điều Khiển Bác Sĩ</h1>
@@ -183,42 +201,7 @@ const DoctorDashboard = () => {
                       {patientNames[appointment._id] || "Không xác định"}
                     </td>
                     <td className="py-4 px-4 text-gray-700">
-                      {appointment?.appointmentDate && appointment?.timeslot
-                        ? (() => {
-                          try {
-                            const date = new Date(appointment.appointmentDate);
-                            if (isNaN(date.getTime())) throw new Error("Invalid date");
-
-                            const formattedDate = date.toLocaleDateString("vi-VN", {
-                              year: "numeric",
-                              month: "2-digit",
-                              day: "2-digit",
-                              timeZone: "Asia/Ho_Chi_Minh",
-                            });
-
-                            const timeParts =
-                              appointment.timeslot.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i) ||
-                              appointment.timeslot.match(/(\d{1,2}):(\d{2})(?::\d{2})?/);
-                            if (!timeParts) throw new Error("Invalid timeslot");
-
-                            let hours = parseInt(timeParts[1], 10);
-                            const minutes = timeParts[2];
-                            const isPM = timeParts[3] && timeParts[3].toUpperCase() === "PM";
-
-                            if (isPM && hours < 12) hours += 12;
-                            if (!isPM && hours === 12) hours = 0;
-
-                            const formattedTime = `${hours.toString().padStart(2, "0")}:${minutes}`;
-                            return `${formattedDate} ${formattedTime}`;
-                          } catch (error) {
-                            console.warn("Date formatting error:", error.message, {
-                              appointmentDate: appointment.appointmentDate,
-                              timeslot: appointment.timeslot,
-                            });
-                            return "N/A";
-                          }
-                        })()
-                        : "N/A"}
+                      {formatDateTime(appointment.appointmentDate, appointment.timeslot)}
                     </td>
                     <td className="py-4 px-4">
                       <span

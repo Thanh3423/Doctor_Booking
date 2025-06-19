@@ -1,7 +1,7 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
-const moment = require("moment-timezone"); // Thêm import moment-timezone
+const moment = require("moment-timezone");
 const doctorModel = require("../models/doctor.model");
 const specialtyModel = require("../models/specialty.model");
 const reviewModel = require("../models/review.model");
@@ -13,17 +13,16 @@ const patientModel = require("../models/patient.model");
 const getMySchedule = async (req, res) => {
   try {
     const doctorId = req.user?.id;
-    const { weekStartDate } = req.query; // Lấy weekStartDate từ query params
+    const { weekStartDate } = req.query;
 
     if (!doctorId) {
       return res.status(401).json({ success: false, message: 'Không được phép: Thiếu ID bác sĩ.' });
     }
 
     if (!weekStartDate) {
-      return res.status(400).json({ success: false, message: 'Thiếu tham số weekStartDate.' });
+      return res.status(400).json({ success: false, message: 'Thiếu tham số ngày bắt đầu tuần.' });
     }
 
-    // Chuyển đổi weekStartDate thành Date và chuẩn hóa về đầu tuần
     const startOfWeek = moment.tz(weekStartDate, 'Asia/Ho_Chi_Minh').startOf('week').toDate();
 
     const schedule = await scheduleModel
@@ -41,7 +40,6 @@ const getMySchedule = async (req, res) => {
       });
     }
 
-    // Format dữ liệu trả về để đảm bảo đồng nhất với frontend
     const formattedSchedule = {
       _id: schedule._id,
       doctorId: schedule.doctorId,
@@ -67,42 +65,41 @@ const getMySchedule = async (req, res) => {
     res.status(200).json({ success: true, data: formattedSchedule });
   } catch (error) {
     console.error('Lỗi khi lấy lịch làm việc:', error);
-    res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+    res.status(500).json({ success: false, message: 'Lỗi máy chủ.', error: error.message });
   }
 };
 
-// Các hàm khác giữ nguyên
 const loginDoctor = async (req, res) => {
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required." });
+      return res.status(400).json({ message: "Email và mật khẩu là bắt buộc." });
     }
 
     const doctor = await doctorModel.findOne({ email });
 
     if (!doctor) {
-      return res.status(401).json({ message: "Invalid credentials." });
+      return res.status(401).json({ message: "Thông tin đăng nhập không hợp lệ." });
     }
 
     const isMatch = await bcrypt.compare(password, doctor.password);
     if (!isMatch) {
-      return res.status(401).json({ message: "Invalid credentials." });
+      return res.status(401).json({ message: "Thông tin đăng nhập không hợp lệ." });
     }
 
     if (!process.env.JWT_KEY) {
-      throw new Error("JWT_SECRET_KEY is not defined in environment variables");
+      throw new Error("Khóa JWT_SECRET_KEY chưa được định nghĩa trong biến môi trường.");
     }
 
     const token = jwt.sign(
       { id: doctor._id, role: "doctor" },
       process.env.JWT_KEY
     );
-    res.status(200).json({ message: "Login successful", token });
+    res.status(200).json({ message: "Đăng nhập thành công.", token });
   } catch (error) {
-    console.error("Error during doctor login:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("Lỗi trong quá trình đăng nhập bác sĩ:", error);
+    res.status(500).json({ message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
@@ -111,8 +108,8 @@ const getAllDoctors = async (req, res) => {
     const doctors = await doctorModel.find().populate('specialty');
     res.status(200).json({ success: true, data: doctors });
   } catch (error) {
-    console.error("Error fetching doctors:", error);
-    res.status(500).json({ success: false, message: "Server error", error: error.message });
+    console.error("Lỗi khi lấy danh sách bác sĩ:", error);
+    res.status(500).json({ success: false, message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
@@ -121,19 +118,19 @@ const deleteDoctor = async (req, res) => {
     const { id } = req.params;
     const doctor = await doctorModel.findByIdAndDelete(id);
     if (!doctor) {
-      return res.status(404).json({ message: "Doctor not found" });
+      return res.status(404).json({ message: "Không tìm thấy bác sĩ." });
     }
-    res.status(200).json({ message: "Doctor deleted successfully", doctor });
+    res.status(200).json({ message: "Xóa bác sĩ thành công.", doctor });
   } catch (error) {
-    console.error("Error deleting doctor:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("Lỗi khi xóa bác sĩ:", error);
+    res.status(500).json({ message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
 const addManyDoctors = async (req, res) => {
   try {
     if (!Array.isArray(req.body) || req.body.length === 0) {
-      return res.status(400).json({ error: "Invalid input: Expected an array of doctors" });
+      return res.status(400).json({ error: "Dữ liệu không hợp lệ: Yêu cầu một mảng danh sách bác sĩ." });
     }
 
     const bulkOps = req.body.map((doc) => ({
@@ -145,10 +142,10 @@ const addManyDoctors = async (req, res) => {
     }));
 
     const result = await doctorModel.bulkWrite(bulkOps);
-    res.status(201).json({ message: "Doctors added/updated successfully", result });
+    res.status(201).json({ message: "Thêm/cập nhật danh sách bác sĩ thành công.", result });
   } catch (error) {
-    console.error("Error adding/updating doctors:", error);
-    res.status(500).json({ error: "Failed to add/update doctors", details: error.message });
+    console.error("Lỗi khi thêm/cập nhật danh sách bác sĩ:", error);
+    res.status(500).json({ error: "Không thể thêm/cập nhật danh sách bác sĩ.", details: error.message });
   }
 };
 
@@ -157,19 +154,19 @@ const getDoctorData = async (req, res) => {
     const { id } = req.params;
 
     if (!id) {
-      return res.status(400).json({ message: "Doctor ID is required" });
+      return res.status(400).json({ message: "ID bác sĩ là bắt buộc." });
     }
 
     const doctor = await doctorModel.findById(id).populate('specialty', 'name');
 
     if (!doctor) {
-      return res.status(404).json({ message: "Doctor not found" });
+      return res.status(404).json({ message: "Không tìm thấy bác sĩ." });
     }
 
     res.status(200).json({ success: true, data: doctor });
   } catch (error) {
-    console.error("Error fetching doctor data:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("Lỗi khi lấy thông tin bác sĩ:", error);
+    res.status(500).json({ message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
@@ -196,13 +193,13 @@ const getDoctorRating = async (req, res) => {
       res.status(200).json({ averageRating: "0", totalReviews: 0 });
     }
   } catch (error) {
-    console.error("Error calculating average rating:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("Lỗi khi tính điểm đánh giá trung bình:", error);
+    res.status(500).json({ message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
 const getAllDoctorRatings = async (req, res) => {
-  console.log("Hit /doctor/all-ratings endpoint");
+  console.log("Truy cập endpoint /doctor/all-ratings");
   try {
     const ratings = await reviewModel.aggregate([
       {
@@ -221,7 +218,7 @@ const getAllDoctorRatings = async (req, res) => {
       },
     ]);
 
-    console.log("Ratings fetched:", ratings);
+    console.log("Danh sách đánh giá đã lấy:", ratings);
 
     if (!ratings || ratings.length === 0) {
       return res.status(200).json([]);
@@ -229,13 +226,13 @@ const getAllDoctorRatings = async (req, res) => {
 
     res.status(200).json(ratings);
   } catch (error) {
-    console.error("Error fetching doctor ratings:", {
+    console.error("Lỗi khi lấy đánh giá bác sĩ:", {
       message: error.message,
       stack: error.stack,
       code: error.code,
     });
     res.status(500).json({
-      message: "Failed to fetch doctor ratings",
+      message: "Không thể lấy danh sách đánh giá bác sĩ.",
       error: error.message,
     });
   }
@@ -248,8 +245,8 @@ const getAllAppointments = async (req, res) => {
       .populate('doctorId', 'name specialty');
     res.status(200).json({ success: true, data: appointments });
   } catch (error) {
-    console.error('Error fetching all appointments:', error);
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    console.error('Lỗi khi lấy tất cả lịch hẹn:', error);
+    res.status(500).json({ success: false, message: 'Lỗi máy chủ.', error: error.message });
   }
 };
 
@@ -278,17 +275,17 @@ const getMyAppointments = async (req, res) => {
       patientImage: appt.patientId?.image || "",
       doctorName: appt.doctorId?.name || "N/A",
       doctorSpecialization: appt.doctorId?.specialty?.name || "N/A",
-      appointmentDate: appt.appointmentDate,
-      timeslot: appt.timeslot,
+      appointmentDate: moment.tz(appt.appointmentDate, 'Asia/Ho_Chi_Minh').format('YYYY-MM-DD HH:mm'),
+      timeslot: appt.timeslot || "N/A",
       status: appt.status || "pending",
       notes: appt.notes || "",
-      createdAt: appt.createdAt,
+      createdAt: moment.tz(appt.createdAt, 'Asia/Ho_Chi_Minh').format('YYYY-MM-DD HH:mm'),
     }));
 
     res.status(200).json({ success: true, data: formattedAppointments });
   } catch (error) {
     console.error("Lỗi khi lấy lịch hẹn:", error);
-    res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
+    res.status(500).json({ success: false, message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
@@ -298,7 +295,7 @@ const updateAppointment = async (req, res) => {
     const { status, notes } = req.body;
     const doctorId = req.user?.id;
 
-    console.log('Updating appointment:', { id, status, notes, doctorId });
+    console.log('Cập nhật lịch hẹn:', { id, status, notes, doctorId });
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "ID lịch hẹn không hợp lệ." });
@@ -357,7 +354,7 @@ const updateAppointment = async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi khi cập nhật lịch hẹn:", error);
-    res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
+    res.status(500).json({ success: false, message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
@@ -375,7 +372,7 @@ const getAllReviews = async (req, res) => {
     res.status(200).json(allReviews);
   } catch (error) {
     console.error("Lỗi khi lấy đánh giá:", error);
-    res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
+    res.status(500).json({ success: false, message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
@@ -385,25 +382,25 @@ const deleteAppointment = async (req, res) => {
     const doctorId = req.user?.id;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: "Invalid appointment ID" });
+      return res.status(400).json({ message: "ID lịch hẹn không hợp lệ." });
     }
 
     if (!doctorId) {
-      return res.status(401).json({ message: "Unauthorized: Doctor ID not found" });
+      return res.status(401).json({ message: "Không được phép: Thiếu ID bác sĩ." });
     }
 
     const appointment = await appointmentModel.findById(id);
     if (!appointment) {
-      return res.status(404).json({ message: "Appointment not found" });
+      return res.status(404).json({ message: "Không tìm thấy lịch hẹn." });
     }
 
     if (appointment.doctorId.toString() !== doctorId) {
-      return res.status(403).json({ message: "Unauthorized: You can only delete your own appointments" });
+      return res.status(403).json({ message: "Không được phép: Bạn chỉ có thể xóa lịch hẹn của mình." });
     }
 
     const reviewCount = await reviewModel.countDocuments({ appointmentId: id });
     if (reviewCount > 0) {
-      return res.status(400).json({ message: "Cannot delete appointment with associated reviews" });
+      return res.status(400).json({ message: "Không thể xóa lịch hẹn đã có đánh giá liên quan." });
     }
 
     const schedule = await scheduleModel.findOne({
@@ -426,10 +423,10 @@ const deleteAppointment = async (req, res) => {
     }
 
     await appointmentModel.findByIdAndDelete(id);
-    res.status(200).json({ message: "Appointment deleted successfully" });
+    res.status(200).json({ message: "Xóa lịch hẹn thành công." });
   } catch (error) {
-    console.error("Error deleting appointment:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("Lỗi khi xóa lịch hẹn:", error);
+    res.status(500).json({ message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
@@ -437,12 +434,12 @@ const getId = async (req, res) => {
   try {
     const doctorId = req.user?.id;
     if (!doctorId) {
-      return res.status(401).json({ message: "Unauthorized: ID not found" });
+      return res.status(401).json({ message: "Không được phép: Thiếu ID bác sĩ." });
     }
     res.status(200).json({ id: doctorId });
   } catch (error) {
-    console.error("Error fetching doctor ID:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("Lỗi khi lấy ID bác sĩ:", error);
+    res.status(500).json({ message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
@@ -457,35 +454,35 @@ const updateProfile = async (req, res) => {
     }).populate('specialty', 'name');
 
     if (!updatedDoctor) {
-      return res.status(404).json({ message: "Doctor not found" });
+      return res.status(404).json({ message: "Không tìm thấy bác sĩ." });
     }
 
-    res.status(200).json({ message: "Profile updated", updatedProfile: updatedDoctor });
+    res.status(200).json({ message: "Cập nhật hồ sơ thành công.", updatedProfile: updatedDoctor });
   } catch (error) {
-    console.error("Error updating profile:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("Lỗi khi cập nhật hồ sơ:", error);
+    res.status(500).json({ message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
 const uploadImage = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ message: "Chưa chọn ảnh" });
+      return res.status(400).json({ message: "Chưa chọn hình ảnh." });
     }
     const imageUrl = req.file.filename;
-    console.log("Uploaded file:", req.file);
+    console.log("Tệp đã tải lên:", req.file);
     const doctor = await doctorModel.findByIdAndUpdate(
       req.params.id,
       { image: imageUrl },
       { new: true }
     ).populate("specialty", "name");
     if (!doctor) {
-      return res.status(404).json({ message: "Không tìm thấy bác sĩ" });
+      return res.status(404).json({ message: "Không tìm thấy bác sĩ." });
     }
-    res.status(200).json({ message: "Cập nhật ảnh hồ sơ thành công", imageUrl });
+    res.status(200).json({ message: "Cập nhật hình ảnh hồ sơ thành công.", imageUrl });
   } catch (error) {
-    console.error("Lỗi khi tải ảnh lên:", error);
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    console.error("Lỗi khi tải hình ảnh lên:", error);
+    res.status(500).json({ message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
@@ -495,27 +492,27 @@ const changePassword = async (req, res) => {
     const doctorId = req.user?.id;
 
     if (!doctorId) {
-      return res.status(401).json({ message: "Không có ID bác sĩ" });
+      return res.status(401).json({ message: "Không được phép: Thiếu ID bác sĩ." });
     }
 
     if (!oldPassword || !newPassword || !confirmPassword) {
-      return res.status(400).json({ message: "Vui lòng điền đầy đủ các trường" });
+      return res.status(400).json({ message: "Vui lòng điền đầy đủ các trường thông tin." });
     }
     if (newPassword !== confirmPassword) {
-      return res.status(400).json({ message: "Mật khẩu mới và xác nhận không khớp" });
+      return res.status(400).json({ message: "Mật khẩu mới và xác nhận mật khẩu không khớp." });
     }
     if (newPassword.length < 6) {
-      return res.status(400).json({ message: "Mật khẩu mới phải có ít nhất 6 ký tự" });
+      return res.status(400).json({ message: "Mật khẩu mới phải có ít nhất 6 ký tự." });
     }
 
     const doctor = await doctorModel.findById(doctorId);
     if (!doctor) {
-      return res.status(404).json({ message: "Không tìm thấy bác sĩ" });
+      return res.status(404).json({ message: "Không tìm thấy bác sĩ." });
     }
 
     const isMatch = await bcrypt.compare(oldPassword, doctor.password);
     if (!isMatch) {
-      return res.status(400).json({ message: "Mật khẩu cũ không đúng" });
+      return res.status(400).json({ message: "Mật khẩu cũ không đúng." });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -524,17 +521,17 @@ const changePassword = async (req, res) => {
     doctor.password = hashedPassword;
     await doctor.save();
 
-    console.log("Password changed for doctor:", doctor.email);
-    res.status(200).json({ message: "Đổi mật khẩu thành công" });
+    console.log("Đã đổi mật khẩu cho bác sĩ:", doctor.email);
+    res.status(200).json({ message: "Đổi mật khẩu thành công." });
   } catch (error) {
     console.error("Lỗi khi đổi mật khẩu:", error.message, error.stack);
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    res.status(500).json({ message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
 const getPublicDoctors = async (req, res) => {
   try {
-    console.log("Fetching public doctors...");
+    console.log("Đang lấy danh sách bác sĩ công khai...");
     const doctors = await doctorModel.find()
       .select("_id name specialty experience image averageRating totalReviews email location fees about phone")
       .populate({
@@ -542,19 +539,19 @@ const getPublicDoctors = async (req, res) => {
         select: "name",
         model: specialtyModel,
       });
-    console.log("Public Doctors:", doctors);
+    console.log("Danh sách bác sĩ công khai:", doctors);
     res.json({ success: true, data: doctors });
   } catch (error) {
-    console.error("Error fetching public doctors:", error.message, error.stack);
-    res.status(500).json({ success: false, message: "Error fetching public doctors", error: error.message });
+    console.error("Lỗi khi lấy danh sách bác sĩ công khai:", error.message, error.stack);
+    res.status(500).json({ success: false, message: "Lỗi khi lấy danh sách bác sĩ công khai.", error: error.message });
   }
 };
 
 const getPublicDoctorData = async (req, res) => {
   const doctorId = req.params.doctorId;
   try {
-    console.log('[getPublicDoctorData] Received doctorId:', doctorId);
-    console.log('[getPublicDoctorData] doctorId details:', {
+    console.log('[getPublicDoctorData] Nhận ID bác sĩ:', doctorId);
+    console.log('[getPublicDoctorData] Chi tiết ID bác sĩ:', {
       raw: doctorId,
       length: doctorId?.length,
       isHex: /^[0-9a-fA-F]{24}$/.test(doctorId),
@@ -562,8 +559,8 @@ const getPublicDoctorData = async (req, res) => {
     });
 
     if (!mongoose.Types.ObjectId.isValid(doctorId)) {
-      console.warn('[getPublicDoctorData] Invalid doctorId:', doctorId);
-      return res.status(400).json({ success: false, message: 'ID bác sĩ không hợp lệ' });
+      console.warn('[getPublicDoctorData] ID bác sĩ không hợp lệ:', doctorId);
+      return res.status(400).json({ success: false, message: 'ID bác sĩ không hợp lệ.' });
     }
 
     const doctor = await doctorModel
@@ -572,8 +569,8 @@ const getPublicDoctorData = async (req, res) => {
       .populate('specialty', 'name');
 
     if (!doctor) {
-      console.log('[getPublicDoctorData] Doctor not found for ID:', doctorId);
-      return res.status(404).json({ success: false, message: 'Bác sĩ không tồn tại' });
+      console.log('[getPublicDoctorData] Không tìm thấy bác sĩ với ID:', doctorId);
+      return res.status(404).json({ success: false, message: 'Bác sĩ không tồn tại.' });
     }
 
     const transformedDoctor = {
@@ -583,16 +580,15 @@ const getPublicDoctorData = async (req, res) => {
 
     res.status(200).json({ success: true, data: transformedDoctor });
   } catch (error) {
-    console.error('[getPublicDoctorData] Error fetching doctor profile:', {
+    console.error('[getPublicDoctorData] Lỗi khi lấy hồ sơ bác sĩ:', {
       message: error.message,
       stack: error.stack,
       doctorId: doctorId || 'undefined',
     });
-    res.status(500).json({ success: false, message: 'Lỗi máy chủ', error: error.message });
+    res.status(500).json({ success: false, message: 'Lỗi máy chủ.', error: error.message });
   }
 };
 
-// New Medical History Functions
 const createMedicalHistory = async (req, res) => {
   try {
     const { appointmentId, diagnosis, treatment } = req.body;
@@ -607,7 +603,7 @@ const createMedicalHistory = async (req, res) => {
     }
 
     if (!diagnosis || !treatment) {
-      return res.status(400).json({ success: false, message: "Chẩn đoán và điều trị là bắt buộc." });
+      return res.status(400).json({ success: false, message: "Chẩn đoán và phương pháp điều trị là bắt buộc." });
     }
 
     const appointment = await appointmentModel.findById(appointmentId).populate("patientId", "name email");
@@ -658,7 +654,7 @@ const createMedicalHistory = async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi khi thêm bệnh án:", error);
-    res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
+    res.status(500).json({ success: false, message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
@@ -707,7 +703,7 @@ const getAllMedicalHistories = async (req, res) => {
     if (!medicalHistories.length) {
       return res.status(200).json({
         success: true,
-        message: "Không có bệnh án nào.",
+        message: "Không tìm thấy bệnh án nào.",
         data: [],
       });
     }
@@ -727,7 +723,7 @@ const getAllMedicalHistories = async (req, res) => {
     res.status(200).json({ success: true, data: formattedHistories });
   } catch (error) {
     console.error("Lỗi khi lấy tất cả bệnh án:", error);
-    res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
+    res.status(500).json({ success: false, message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
@@ -736,7 +732,7 @@ const getMedicalHistoryByPatient = async (req, res) => {
     const { patientId } = req.params;
     const doctorId = req.user?.id;
 
-    console.log('[getMedicalHistoryByPatient] Received patientId:', {
+    console.log('[getMedicalHistoryByPatient] Nhận ID bệnh nhân:', {
       patientId,
       length: patientId?.length,
       isHex: patientId ? /^[0-9a-fA-F]{24}$/.test(patientId) : false,
@@ -764,7 +760,7 @@ const getMedicalHistoryByPatient = async (req, res) => {
     if (!medicalHistories.length) {
       return res.status(200).json({
         success: true,
-        message: `Không tìm thấy bệnh án nào cho ID bệnh nhân "${patientId}".`,
+        message: `Không tìm thấy bệnh án nào cho bệnh nhân có ID "${patientId}".`,
         data: []
       });
     }
@@ -784,7 +780,7 @@ const getMedicalHistoryByPatient = async (req, res) => {
     res.status(200).json({ success: true, data: formattedHistories });
   } catch (error) {
     console.error("Lỗi khi lấy bệnh án:", error);
-    res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
+    res.status(500).json({ success: false, message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
@@ -840,7 +836,7 @@ const updateMedicalHistory = async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi khi cập nhật bệnh án:", error);
-    res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
+    res.status(500).json({ success: false, message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
@@ -870,7 +866,7 @@ const deleteMedicalHistory = async (req, res) => {
     res.status(200).json({ success: true, message: "Xóa bệnh án thành công." });
   } catch (error) {
     console.error("Lỗi khi xóa bệnh án:", error);
-    res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
+    res.status(500).json({ success: false, message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
@@ -907,7 +903,7 @@ const getCompletedAppointments = async (req, res) => {
     res.status(200).json({ success: true, data: formattedAppointments });
   } catch (error) {
     console.error("Lỗi khi lấy danh sách cuộc hẹn đã hoàn thành:", error);
-    res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
+    res.status(500).json({ success: false, message: "Lỗi máy chủ.", error: error.message });
   }
 };
 

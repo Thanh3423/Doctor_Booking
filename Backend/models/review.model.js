@@ -3,17 +3,17 @@ const mongoose = require("mongoose");
 const reviewSchema = new mongoose.Schema({
     patientId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "patient",
+        ref: "Patient",
         required: true,
     },
     doctorId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "doctor",
+        ref: "Doctor",
         required: true,
     },
     appointmentId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "appointment",
+        ref: "Appointment",
         required: true,
     },
     rating: {
@@ -34,4 +34,4 @@ const reviewSchema = new mongoose.Schema({
 
 reviewSchema.index({ doctorId: 1 });
 reviewSchema.index({ patientId: 1 });
-module.exports = mongoose.model("review", reviewSchema);
+module.exports = mongoose.model("Review", reviewSchema);

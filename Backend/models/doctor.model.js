@@ -69,7 +69,7 @@ const doctorSchema = mongoose.Schema({
 }, { minimize: false });
 
 doctorSchema.methods.calculateAverageRating = async function () {
-    const reviews = await mongoose.model("review").find({ doctorId: this._id });
+    const reviews = await mongoose.model("Review").find({ doctorId: this._id });
     if (reviews.length === 0) {
         this.averageRating = 0;
         this.totalReviews = 0;
@@ -84,4 +84,4 @@ doctorSchema.methods.calculateAverageRating = async function () {
 
 doctorSchema.index({ specialty: 1 });
 
-module.exports = mongoose.model("doctor", doctorSchema);
+module.exports = mongoose.model("Doctor", doctorSchema);

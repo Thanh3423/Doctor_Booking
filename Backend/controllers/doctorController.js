@@ -1,3 +1,4 @@
+
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
@@ -7,6 +8,7 @@ const reviewModel = require("../models/review.model");
 const appointmentModel = require("../models/appointment.model");
 const scheduleModel = require("../models/schedule.model");
 const medicalHistoryModel = require("../models/medicalHistory.model");
+const patientModel = require("../models/patient.model"); // Added Patient model import
 
 const loginDoctor = async (req, res) => {
   try {
@@ -234,7 +236,7 @@ const updateAppointment = async (req, res) => {
     const { status, notes } = req.body;
     const doctorId = req.user?.id;
 
-    console.log('Updating appointment:', { id, status, notes, doctorId }); // Add logging
+    console.log('Updating appointment:', { id, status, notes, doctorId });
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "ID lịch hẹn không hợp lệ." });
@@ -509,7 +511,7 @@ const getPublicDoctors = async (req, res) => {
 };
 
 const getPublicDoctorData = async (req, res) => {
-  const doctorId = req.params.doctorId; // Define doctorId outside try-catch
+  const doctorId = req.params.doctorId;
   try {
     console.log('[getPublicDoctorData] Received doctorId:', doctorId);
     console.log('[getPublicDoctorData] doctorId details:', {
@@ -544,7 +546,7 @@ const getPublicDoctorData = async (req, res) => {
     console.error('[getPublicDoctorData] Error fetching doctor profile:', {
       message: error.message,
       stack: error.stack,
-      doctorId: doctorId || 'undefined', // Use defined doctorId
+      doctorId: doctorId || 'undefined',
     });
     res.status(500).json({ success: false, message: 'Lỗi máy chủ', error: error.message });
   }
@@ -620,17 +622,96 @@ const createMedicalHistory = async (req, res) => {
   }
 };
 
-const getMedicalHistoryByPatient = async (req, res) => {
+const getAllMedicalHistories = async (req, res) => {
   try {
-    const { patientId } = req.params;
     const doctorId = req.user?.id;
+    const { patientName, appointmentDate } = req.query;
 
     if (!doctorId) {
       return res.status(401).json({ success: false, message: "Không được phép: Thiếu ID bác sĩ." });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(patientId)) {
-      return res.status(400).json({ success: false, message: "ID bệnh nhân không hợp lệ." });
+    let query = { doctor: doctorId };
+
+    if (patientName) {
+      query["patient"] = {
+        $in: await patientModel.find(
+          { name: { $regex: patientName, $options: "i" } },
+          "_id"
+        ).distinct("_id"),
+      };
+    }
+
+    if (appointmentDate) {
+      const startOfDay = new Date(appointmentDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(appointmentDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      query["appointmentId"] = {
+        $in: await appointmentModel.find(
+          {
+            appointmentDate: { $gte: startOfDay, $lte: endOfDay },
+          },
+          "_id"
+        ).distinct("_id"),
+      };
+    }
+
+    const medicalHistories = await medicalHistoryModel
+      .find(query)
+      .populate("patient", "name email")
+      .populate("doctor", "name")
+      .populate("appointmentId", "appointmentDate timeslot")
+      .sort({ date: -1 });
+
+    if (!medicalHistories.length) {
+      return res.status(200).json({
+        success: true,
+        message: "Không có bệnh án nào.",
+        data: [],
+      });
+    }
+
+    const formattedHistories = medicalHistories.map((history) => ({
+      _id: history._id,
+      patientName: history.patient?.name || "Không xác định",
+      patientEmail: history.patient?.email || "",
+      doctorName: history.doctor?.name || "Không xác định",
+      appointmentDate: history.appointmentId?.appointmentDate || null,
+      timeslot: history.appointmentId?.timeslot || "",
+      diagnosis: history.diagnosis,
+      treatment: history.treatment,
+      date: history.date,
+    }));
+
+    res.status(200).json({ success: true, data: formattedHistories });
+  } catch (error) {
+    console.error("Lỗi khi lấy tất cả bệnh án:", error);
+    res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
+  }
+};
+
+const getMedicalHistoryByPatient = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const doctorId = req.user?.id;
+
+    console.log('[getMedicalHistoryByPatient] Received patientId:', {
+      patientId,
+      length: patientId?.length,
+      isHex: patientId ? /^[0-9a-fA-F]{24}$/.test(patientId) : false,
+      isValidObjectId: patientId ? mongoose.Types.ObjectId.isValid(patientId) : false,
+    });
+
+    if (!doctorId) {
+      return res.status(401).json({ success: false, message: "Không được phép: Thiếu ID bác sĩ." });
+    }
+
+    if (!patientId || !mongoose.Types.ObjectId.isValid(patientId)) {
+      return res.status(400).json({
+        success: false,
+        message: "ID bệnh nhân không hợp lệ. Vui lòng cung cấp chuỗi 24 ký tự hexadecimal."
+      });
     }
 
     const medicalHistories = await medicalHistoryModel
@@ -639,6 +720,14 @@ const getMedicalHistoryByPatient = async (req, res) => {
       .populate("doctor", "name")
       .populate("appointmentId", "appointmentDate timeslot")
       .sort({ date: -1 });
+
+    if (!medicalHistories.length) {
+      return res.status(200).json({
+        success: true,
+        message: `Không tìm thấy bệnh án nào cho ID bệnh nhân "${patientId}".`,
+        data: []
+      });
+    }
 
     const formattedHistories = medicalHistories.map((history) => ({
       _id: history._id,
@@ -767,10 +856,9 @@ const getCompletedAppointments = async (req, res) => {
       patientEmail: appt.patientId?.email || "",
       appointmentDate: appt.appointmentDate,
       timeslot: appt.timeslot,
-      hasMedicalHistory: false, // Will check if medical history exists
+      hasMedicalHistory: false,
     }));
 
-    // Check for existing medical histories
     for (let appt of formattedAppointments) {
       const medicalHistory = await medicalHistoryModel.findOne({ appointmentId: appt._id });
       appt.hasMedicalHistory = !!medicalHistory;
@@ -804,6 +892,7 @@ module.exports = {
   getMySchedule,
   changePassword,
   createMedicalHistory,
+  getAllMedicalHistories,
   getMedicalHistoryByPatient,
   updateMedicalHistory,
   deleteMedicalHistory,

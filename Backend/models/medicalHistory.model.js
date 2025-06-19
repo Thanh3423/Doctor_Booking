@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const medicalHistorySchema = mongoose.Schema({
     patient: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "patient",
+        ref: "Patient", // Changed from "patient" to "Patient"
         required: true,
     },
     diagnosis: {
@@ -18,12 +18,12 @@ const medicalHistorySchema = mongoose.Schema({
     },
     doctor: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "doctor",
+        ref: "Doctor", // Changed from "doctor" to "Doctor"
         required: true,
     },
     appointmentId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "appointment",
+        ref: "Appointment", // Changed from "appointment" to "Appointment"
     },
     date: {
         type: Date,

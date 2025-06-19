@@ -37,14 +37,14 @@ const patientSchema = mongoose.Schema({
     reviews: [
         {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "review",
+            ref: "Review",
         },
     ],
 
     appointment: [
         {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "appointment",
+            ref: "Apointment",
         },
     ],
     createdAt: {
@@ -58,4 +58,4 @@ patientSchema.index({ "medicalHistory.doctor": 1 });
 patientSchema.index({ reviews: 1 });
 patientSchema.index({ appointment: 1 });
 
-module.exports = mongoose.model("patient", patientSchema);
+module.exports = mongoose.model("Patient", patientSchema);

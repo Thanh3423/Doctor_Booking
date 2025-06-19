@@ -9,7 +9,8 @@ const ManageMedicalHistory = () => {
     const [medicalHistories, setMedicalHistories] = useState([]);
     const [completedAppointments, setCompletedAppointments] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState("");
+    const [searchPatientName, setSearchPatientName] = useState("");
+    const [searchAppointmentDate, setSearchAppointmentDate] = useState("");
     const [showAddModal, setShowAddModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -39,7 +40,11 @@ const ManageMedicalHistory = () => {
                 });
                 setCompletedAppointments(response.data.data || []);
             } catch (error) {
-                console.error("Lỗi khi lấy cuộc hẹn:", error.response?.data || error.message);
+                console.error("Lỗi khi lấy cuộc hẹn:", {
+                    message: error.message,
+                    response: error.response?.data,
+                    status: error.response?.status,
+                });
                 toast.error(error.response?.data?.message || "Không thể tải danh sách cuộc hẹn.");
             } finally {
                 setIsLoading(false);
@@ -48,43 +53,62 @@ const ManageMedicalHistory = () => {
         if (dToken) fetchCompletedAppointments();
     }, [dToken, backendUrl, navigate]);
 
-    // Fetch all medical histories or by patient search
+    // Fetch all medical histories or by search criteria
     useEffect(() => {
         const fetchMedicalHistories = async () => {
             setIsLoading(true);
             try {
                 let url = `${backendUrl}/doctor/medical-history`;
-                if (searchTerm && /^[0-9a-fA-F]{24}$/.test(searchTerm)) {
-                    url = `${backendUrl}/doctor/medical-history/${searchTerm}`;
+                const params = {};
+                if (searchPatientName.trim()) {
+                    params.patientName = searchPatientName.trim();
                 }
-                console.log("Fetching medical histories with URL:", url);
+                if (searchAppointmentDate) {
+                    params.appointmentDate = searchAppointmentDate;
+                }
+                console.log("Fetching medical histories with URL:", url, "Params:", params);
                 const response = await axios.get(url, {
                     headers: { Authorization: `Bearer ${dToken}` },
+                    params,
                 });
                 setMedicalHistories(response.data.data || []);
             } catch (error) {
-                console.error("Lỗi khi lấy bệnh án:", error.response?.data || error.message);
+                console.error("Lỗi khi lấy bệnh án:", {
+                    message: error.message,
+                    response: error.response?.data,
+                    status: error.response?.status,
+                    url: error.config?.url,
+                });
+                toast.error(error.response?.data?.message || "Không thể tải bệnh án.");
                 if (error.response?.status === 401 || error.response?.status === 403) {
                     toast.error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.");
                     navigate("/doctor/login");
-                } else {
-                    toast.error(error.response?.data?.message || "Không thể tải bệnh án.");
                 }
             } finally {
                 setIsLoading(false);
             }
         };
         if (dToken) fetchMedicalHistories();
-    }, [dToken, backendUrl, navigate, searchTerm]);
+    }, [dToken, backendUrl, navigate, searchPatientName, searchAppointmentDate]);
 
-    // Handle search input change
-    const handleSearchChange = (e) => {
-        setSearchTerm(e.target.value);
+    // Handle patient name input change
+    const handlePatientNameChange = (e) => {
+        const value = e.target.value.trimStart();
+        console.log("Search patient name:", { value });
+        setSearchPatientName(value);
     };
 
-    // Clear search term
+    // Handle appointment date input change
+    const handleAppointmentDateChange = (e) => {
+        const value = e.target.value;
+        console.log("Search appointment date:", { value });
+        setSearchAppointmentDate(value);
+    };
+
+    // Clear search fields
     const clearSearch = () => {
-        setSearchTerm("");
+        setSearchPatientName("");
+        setSearchAppointmentDate("");
     };
 
     // Handle form input change
@@ -218,7 +242,11 @@ const ManageMedicalHistory = () => {
             setShowEditModal(false);
             resetForm();
         } catch (error) {
-            console.error("Lỗi khi cập nhật bệnh án:", error.response?.data || error.message);
+            console.error("Lỗi khi cập nhật bệnh án:", {
+                message: error.message,
+                response: error.response?.data,
+                status: error.response?.status,
+            });
             toast.error(error.response?.data?.message || "Không thể cập nhật bệnh án.");
         } finally {
             setIsLoading(false);
@@ -250,7 +278,11 @@ const ManageMedicalHistory = () => {
             setShowDeleteModal(false);
             setHistoryToDelete(null);
         } catch (error) {
-            console.error("Lỗi khi xóa bệnh án:", error.response?.data || error.message);
+            console.error("Lỗi khi xóa bệnh án:", {
+                message: error.message,
+                response: error.response?.data,
+                status: error.response?.status,
+            });
             toast.error(error.response?.data?.message || "Không thể xóa bệnh án.");
         } finally {
             setIsLoading(false);
@@ -280,17 +312,35 @@ const ManageMedicalHistory = () => {
                     </button>
                 </div>
 
-                <div className="relative mb-6">
+                <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                         <input
                             type="text"
-                            placeholder="Tìm kiếm bệnh án theo ID bệnh nhân..."
+                            placeholder="Tìm kiếm theo tên bệnh nhân"
                             className="pl-10 pr-10 py-2 w-full border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm shadow-sm"
-                            value={searchTerm}
-                            onChange={handleSearchChange}
+                            value={searchPatientName}
+                            onChange={handlePatientNameChange}
                         />
-                        {searchTerm && (
+                        {searchPatientName && (
+                            <button
+                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                onClick={clearSearch}
+                            >
+                                <X size={18} />
+                            </button>
+                        )}
+                    </div>
+                    <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <input
+                            type="date"
+                            placeholder="Chọn ngày hẹn"
+                            className="pl-10 pr-10 py-2 w-full border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm shadow-sm"
+                            value={searchAppointmentDate}
+                            onChange={handleAppointmentDateChange}
+                        />
+                        {searchAppointmentDate && (
                             <button
                                 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                                 onClick={clearSearch}
@@ -370,8 +420,9 @@ const ManageMedicalHistory = () => {
                             ) : (
                                 <tr>
                                     <td colSpan="6" className="px-4 py-4 text-center text-gray-500 text-sm">
-                                        {searchTerm
-                                            ? `Không tìm thấy bệnh án nào cho ID bệnh nhân "${searchTerm}"`
+                                        {(searchPatientName || searchAppointmentDate)
+                                            ? `Không tìm thấy bệnh án nào cho ${searchPatientName ? `tên "${searchPatientName}"` : ""}${searchPatientName && searchAppointmentDate ? " và " : ""
+                                            }${searchAppointmentDate ? `ngày "${searchAppointmentDate}"` : ""}`
                                             : "Chưa có bệnh án nào được tạo"}
                                     </td>
                                 </tr>

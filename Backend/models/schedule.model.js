@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const moment = require("moment-timezone");
 
 const scheduleSchema = new mongoose.Schema({
-    doctorId: { type: mongoose.Schema.Types.ObjectId, ref: "doctor", required: true },
+    doctorId: { type: mongoose.Schema.Types.ObjectId, ref: "Doctor", required: true },
     weekStartDate: { type: Date, required: true },
     weekNumber: { type: Number, required: true },
     year: { type: Number, required: true },
@@ -24,7 +24,7 @@ const scheduleSchema = new mongoose.Schema({
                     },
                     isBooked: { type: Boolean, default: false },
                     isAvailable: { type: Boolean, default: true },
-                    patientId: { type: mongoose.Schema.Types.ObjectId, ref: "patient", default: null },
+                    patientId: { type: mongoose.Schema.Types.ObjectId, ref: "Patient", default: null },
                 },
             ],
         },

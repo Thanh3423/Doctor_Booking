@@ -450,34 +450,59 @@ const cancelAppointment = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Lịch hẹn đã được hủy trước đó' });
     }
 
-    if (new Date(appointment.appointmentDate) < new Date()) {
+    // Parse timeslot (e.g., "09:00-10:00" -> start time "09:00")
+    const [startTime] = appointment.timeslot.split('-'); // Get "09:00"
+    const [hours, minutes] = startTime.split(':').map(Number); // Parse hours and minutes
+
+    // Normalize appointment date and time to Asia/Ho_Chi_Minh
+    const appointmentDateTime = moment.tz(appointment.appointmentDate, 'Asia/Ho_Chi_Minh')
+      .set({ hour: hours, minute: minutes, second: 0, millisecond: 0 });
+
+    // Current time in Asia/Ho_Chi_Minh
+    const currentDateTime = moment.tz('Asia/Ho_Chi_Minh');
+
+    console.log('[cancelAppointment] Appointment DateTime:', appointmentDateTime.toISOString());
+    console.log('[cancelAppointment] Current DateTime:', currentDateTime.toISOString());
+
+    // Check if appointment is in the past
+    if (appointmentDateTime.isBefore(currentDateTime)) {
+      console.warn('[cancelAppointment] Past appointment:', {
+        appointmentDateTime: appointmentDateTime.format(),
+        currentDateTime: currentDateTime.format(),
+      });
       return res.status(400).json({ success: false, message: 'Không thể hủy lịch hẹn đã qua' });
     }
 
+    // Mark appointment as cancelled
     appointment.status = 'cancelled';
     await appointment.save();
 
-    const selectedDate = new Date(appointment.appointmentDate);
+    // Update schedule
+    const selectedDate = moment.tz(appointment.appointmentDate, 'Asia/Ho_Chi_Minh');
     const daysMap = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
-    const dayOfWeek = daysMap[selectedDate.getDay()];
+    const dayOfWeek = daysMap[selectedDate.day()];
+    console.log('[cancelAppointment] Day of week:', dayOfWeek);
 
     const schedule = await scheduleModel.findOne({ doctorId: appointment.doctorId });
     if (schedule) {
-      const availability = schedule.availability.find((avail) => avail.day === dayOfWeek);
+      const availability = schedule.availability.find(
+        (avail) => avail.day === dayOfWeek && moment(avail.date).utc().isSame(selectedDate, 'day')
+      );
       if (availability) {
         const timeSlot = availability.timeSlots.find((slot) => slot.time === appointment.timeslot);
         if (timeSlot) {
           timeSlot.isBooked = false;
           timeSlot.patientId = null;
           await schedule.save();
+          console.log('[cancelAppointment] Timeslot updated:', appointment.timeslot);
         } else {
-          console.warn('[cancelAppointment] Timeslot not found:', appointment.timeslot);
+          console.warn('[cancelAppointment] Không tìm thấy khung giờ:', appointment.timeslot);
         }
       } else {
-        console.warn('[cancelAppointment] Availability not found for day:', dayOfWeek);
+        console.warn('[cancelAppointment] Không tìm thấy tính khả dụng cho ngày:', dayOfWeek);
       }
     } else {
-      console.warn('[cancelAppointment] Schedule not found for doctor:', appointment.doctorId);
+      console.warn('[cancelAppointment] Không tìm thấy lịch hẹn cho bác sĩ:', appointment.doctorId);
     }
 
     return res.status(200).json({
@@ -486,7 +511,12 @@ const cancelAppointment = async (req, res) => {
       data: appointment,
     });
   } catch (error) {
-    console.error('[cancelAppointment] Error:', error);
+    console.error('[cancelAppointment] Error:', {
+      message: error.message,
+      stack: error.stack,
+      appointmentId,
+      patientId,
+    });
     return res.status(500).json({ success: false, message: 'Lỗi hủy lịch hẹn', error: error.message });
   }
 };

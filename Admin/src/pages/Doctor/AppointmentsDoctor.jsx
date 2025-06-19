@@ -50,7 +50,7 @@ const StatusBadge = ({ status, onClick }) => {
 
 const StatusModal = ({ isOpen, onClose, onSubmit, appointmentId, status }) => {
   const [note, setNote] = useState("");
-  const [newStatus, setNewStatus] = useState(status || "pending");
+  const [newStatus, setNewStatus] = useState(""); // Initialize as empty to force selection
 
   const statusOptions = [
     { value: "completed", label: "Hoàn thành" },
@@ -58,8 +58,13 @@ const StatusModal = ({ isOpen, onClose, onSubmit, appointmentId, status }) => {
   ].filter(option => option.value !== status?.toLowerCase());
 
   const handleSubmit = () => {
+    if (!newStatus) {
+      toast.error("Vui lòng chọn trạng thái mới.");
+      return;
+    }
     onSubmit(appointmentId, newStatus, note.trim());
     setNote("");
+    setNewStatus(""); // Reset after submit
     onClose();
   };
 
@@ -109,8 +114,7 @@ const StatusModal = ({ isOpen, onClose, onSubmit, appointmentId, status }) => {
           <button
             onClick={handleSubmit}
             disabled={!newStatus}
-            className={`px-4 py-2 rounded-lg transition font-medium ${newStatus ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-gray-300 text-gray-500 cursor-not-allowed"
-              }`}
+            className={`px-4 py-2 rounded-lg transition font-medium ${newStatus ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-gray-300 text-gray-500 cursor-not-allowed"}`}
             aria-label="Xác nhận"
             title="Xác nhận"
           >
@@ -277,19 +281,22 @@ const Appointment = () => {
 
   const updateAppointmentStatus = async (appointmentId, newStatus, note = "") => {
     try {
-      console.log('Updating appointment status with dToken:', dToken);
+      console.log('Updating appointment status:', { appointmentId, newStatus, note, dToken });
       const updateData = { status: newStatus };
       if (note) updateData.notes = note;
 
-      const response = await axios.put(`${backendUrl}/doctor/appointment/update/${appointmentId}`, updateData, {
+      const response = await axios.put(`${backendUrl}/doctor/appointment/${appointmentId}`, updateData, {
         headers: { Authorization: `Bearer ${dToken}` },
       });
 
+      console.log('Backend response:', response.data);
+
       if (response.data.success) {
+        const updatedStatus = response.data.appointment?.status || newStatus;
         setAppointments((prevAppointments) =>
           prevAppointments.map((appointment) =>
             appointment._id === appointmentId
-              ? { ...appointment, status: newStatus, notes: note || appointment.notes }
+              ? { ...appointment, status: updatedStatus, notes: note || appointment.notes }
               : appointment
           )
         );
@@ -298,7 +305,7 @@ const Appointment = () => {
           cancelled: "Đã hủy",
           pending: "Đang chờ",
         };
-        toast.success(`Cập nhật trạng thái lịch hẹn thành công: ${statusText[newStatus.toLowerCase()]}`);
+        toast.success(`Cập nhật trạng thái lịch hẹn thành công: ${statusText[updatedStatus.toLowerCase()]}`);
       } else {
         throw new Error(response.data.message || "Cập nhật trạng thái thất bại.");
       }

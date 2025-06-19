@@ -231,8 +231,10 @@ const getMyAppointments = async (req, res) => {
 const updateAppointment = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, appointmentDate, timeslot, notes } = req.body;
+    const { status, notes } = req.body;
     const doctorId = req.user?.id;
+
+    console.log('Updating appointment:', { id, status, notes, doctorId }); // Add logging
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "ID lịch hẹn không hợp lệ." });

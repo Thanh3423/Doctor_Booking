@@ -120,7 +120,7 @@ const DoctorDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-50 p-6">
-      <h1 className="text-3xl font-bold text-gray-800 mb-8 animate-fade-in">Bảng Điều Khiển Bác Sĩ</h1>
+      <h1 className="text-3xl font-bold text-gray-800 mb-8 animate-fade-in">Bảng điều khiển</h1>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
         <SimpleCard

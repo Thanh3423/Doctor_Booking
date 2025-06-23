@@ -4,6 +4,10 @@ import { AppContext } from "../../context/AppContext";
 import { DoctorContext } from "../../context/DoctorContext";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
+import moment from "moment-timezone";
+import 'moment/locale/vi';
+
+moment.locale('vi');
 
 // Custom debounce hook
 const useDebounce = (value, delay) => {
@@ -39,8 +43,7 @@ const StatusBadge = ({ status, onClick }) => {
   return (
     <span
       onClick={isClickable ? onClick : undefined}
-      className={`inline-flex items-center px-3 py-1 rounded-md text-sm font-medium shadow-sm ${statusColors[normalizedStatus] || "bg-gray-100 text-gray-800"} ${isClickable ? "cursor-pointer hover:scale-105 hover:bg-opacity-80 transition transform" : "cursor-default"
-        }`}
+      className={`inline-flex items-center px-3 py-1 rounded-md text-sm font-medium shadow-sm ${statusColors[normalizedStatus] || "bg-gray-100 text-gray-800"} ${isClickable ? "cursor-pointer hover:scale-105 hover:bg-opacity-80 transition transform" : "cursor-default"}`}
       title={`Trạng thái: ${statusText[normalizedStatus] || "Không xác định"}`}
     >
       {statusText[normalizedStatus] || "Không xác định"}
@@ -50,7 +53,7 @@ const StatusBadge = ({ status, onClick }) => {
 
 const StatusModal = ({ isOpen, onClose, onSubmit, appointmentId, status }) => {
   const [note, setNote] = useState("");
-  const [newStatus, setNewStatus] = useState(""); // Initialize as empty to force selection
+  const [newStatus, setNewStatus] = useState("");
 
   const statusOptions = [
     { value: "completed", label: "Hoàn thành" },
@@ -64,7 +67,7 @@ const StatusModal = ({ isOpen, onClose, onSubmit, appointmentId, status }) => {
     }
     onSubmit(appointmentId, newStatus, note.trim());
     setNote("");
-    setNewStatus(""); // Reset after submit
+    setNewStatus("");
     onClose();
   };
 
@@ -141,6 +144,8 @@ const Appointment = () => {
   const [isModalOpen, setModalOpen] = useState(false);
   const [selectedAppointmentId, setSelectedId] = useState(null);
   const [selectedStatus, setSelectedStatus] = useState("pending");
+  const [currentPage, setCurrentPage] = useState(1);
+  const recordsPerPage = 10;
 
   const { backEndUrl } = useContext(AppContext);
   const { dToken, backendUrl, logout } = useContext(DoctorContext);
@@ -148,7 +153,7 @@ const Appointment = () => {
 
   useEffect(() => {
     if (!dToken) {
-      console.log('No dToken found, redirecting to login');
+      console.log('Không tìm thấy dToken, chuyển hướng đến trang đăng nhập');
       setLoading(false);
       setError("Thiếu mã xác thực. Vui lòng đăng nhập.");
       toast.error("Vui lòng đăng nhập để tiếp tục.");
@@ -158,11 +163,11 @@ const Appointment = () => {
 
     const fetchDoctorId = async () => {
       try {
-        console.log('Fetching doctor ID with dToken:', dToken);
+        console.log('Đang lấy ID bác sĩ với dToken:', dToken);
         const { data } = await axios.get(`${backendUrl}/doctor/id`, {
           headers: { Authorization: `Bearer ${dToken}` },
         });
-        console.log("Fetched Doctor ID:", data.id);
+        console.log("Đã lấy ID bác sĩ:", data.id);
         setDoctorId(data.id);
       } catch (error) {
         console.error("Lỗi lấy ID bác sĩ:", error);
@@ -170,6 +175,7 @@ const Appointment = () => {
         setError("Không thể lấy thông tin bác sĩ.");
         if (error.response?.status === 401) {
           logout();
+          navigate('/doctor/login');
         }
       }
     };
@@ -184,7 +190,7 @@ const Appointment = () => {
       try {
         setLoading(true);
         setError(null);
-        console.log('Fetching appointments with dToken:', dToken);
+        console.log('Đang lấy lịch hẹn với dToken:', dToken);
         const { data } = await axios.get(`${backendUrl}/doctor/my-appointments`, {
           headers: { Authorization: `Bearer ${dToken}` },
         });
@@ -204,6 +210,7 @@ const Appointment = () => {
         toast.error(message);
         if (error.response?.status === 401) {
           logout();
+          navigate('/doctor/login');
         }
       } finally {
         setLoading(false);
@@ -211,7 +218,7 @@ const Appointment = () => {
     };
 
     fetchAppointments();
-  }, [dToken, doctorId, backendUrl, logout]);
+  }, [dToken, doctorId, backendUrl, logout, navigate]);
 
   useEffect(() => {
     if (!appointments.length) return;
@@ -223,7 +230,7 @@ const Appointment = () => {
         phone: appointment.patientPhone || "",
       };
     });
-    console.log("Patient Names Map:", patientMap);
+    console.log("Danh sách tên bệnh nhân:", patientMap);
     setPatientNames(patientMap);
   }, [appointments]);
 
@@ -232,36 +239,37 @@ const Appointment = () => {
 
     const fetchRating = async () => {
       try {
-        console.log('Fetching rating with dToken:', dToken);
+        console.log('Đang lấy đánh giá với dToken:', dToken);
         const { data } = await axios.get(`${backendUrl}/doctor/rating/${doctorId}`, {
           headers: { Authorization: `Bearer ${dToken}` },
         });
-        console.log("Fetched Rating:", data);
+        console.log("Đã lấy đánh giá:", data);
         setRating(data);
       } catch (error) {
         console.error("Lỗi lấy đánh giá:", error);
         toast.error("Không thể tải đánh giá.");
         if (error.response?.status === 401) {
           logout();
+          navigate('/doctor/login');
         }
       }
     };
 
     fetchRating();
-  }, [dToken, doctorId, backendUrl, logout]);
+  }, [dToken, doctorId, backendUrl, logout, navigate]);
 
   useEffect(() => {
     if (!dToken || !doctorId) return;
 
     const fetchReviews = async () => {
       try {
-        console.log("Fetching reviews with doctorId:", doctorId, "dToken:", dToken);
+        console.log("Đang lấy đánh giá với doctorId:", doctorId, "dToken:", dToken);
         const { data } = await axios.get(`${backendUrl}/doctor/my-reviews`, {
           headers: { Authorization: `Bearer ${dToken}` },
         });
-        console.log("Fetched Reviews:", data);
+        console.log("Đã lấy đánh giá:", data);
         if (!Array.isArray(data)) {
-          console.warn("Reviews data is not an array:", data);
+          console.warn("Dữ liệu đánh giá không phải là mảng:", data);
           setReviews([]);
           return;
         }
@@ -272,16 +280,17 @@ const Appointment = () => {
         setReviews([]);
         if (error.response?.status === 401) {
           logout();
+          navigate('/doctor/login');
         }
       }
     };
 
     fetchReviews();
-  }, [dToken, doctorId, backendUrl, logout]);
+  }, [dToken, doctorId, backendUrl, logout, navigate]);
 
   const updateAppointmentStatus = async (appointmentId, newStatus, note = "") => {
     try {
-      console.log('Updating appointment status:', { appointmentId, newStatus, note, dToken });
+      console.log('Đang cập nhật trạng thái lịch hẹn:', { appointmentId, newStatus, note, dToken });
       const updateData = { status: newStatus };
       if (note) updateData.notes = note;
 
@@ -289,7 +298,7 @@ const Appointment = () => {
         headers: { Authorization: `Bearer ${dToken}` },
       });
 
-      console.log('Backend response:', response.data);
+      console.log('Phản hồi từ backend:', response.data);
 
       if (response.data.success) {
         const updatedStatus = response.data.appointment?.status || newStatus;
@@ -337,23 +346,64 @@ const Appointment = () => {
     return status ? status.toLowerCase() : "pending";
   };
 
+  const parseDate = (dateString) => {
+    if (!dateString) {
+      console.warn('Ngày không có giá trị:', dateString);
+      return null;
+    }
+    try {
+      // Try parsing as YYYY-MM-DD HH:mm in +07
+      let date = moment.tz(dateString, 'YYYY-MM-DD HH:mm', 'Asia/Ho_Chi_Minh');
+      if (date.isValid()) {
+        console.log(`Parsed ${dateString} as YYYY-MM-DD HH:mm in +07:`, date.format());
+        return date;
+      }
+
+      // Try parsing as ISO string (assume UTC, convert to +07)
+      date = moment.utc(dateString).tz('Asia/Ho_Chi_Minh');
+      if (date.isValid()) {
+        console.log(`Parsed ${dateString} as ISO (UTC) to +07:`, date.format());
+        return date;
+      }
+
+      // Fallback to general parsing in +07
+      date = moment.tz(dateString, 'Asia/Ho_Chi_Minh');
+      if (date.isValid()) {
+        console.log(`Parsed ${dateString} as general format in +07:`, date.format());
+        return date;
+      }
+
+      throw new Error('Ngày không hợp lệ');
+    } catch (error) {
+      console.warn('Lỗi phân tích ngày:', { dateString, error });
+      return null;
+    }
+  };
+
+  const formatDate = (dateString) => {
+    const date = parseDate(dateString);
+    if (!date) return "N/A";
+    return date.format('DD/MM/YYYY HH:mm');
+  };
+
   const filteredAppointments = appointments.filter((appointment) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const appointmentDate = new Date(appointment.appointmentDate);
-    if (isNaN(appointmentDate.getTime())) {
+    const today = moment().tz('Asia/Ho_Chi_Minh').startOf('day');
+    const appointmentDate = parseDate(appointment.appointmentDate);
+
+    if (!appointmentDate) {
       console.warn(`Ngày không hợp lệ cho lịch hẹn ${appointment._id}:`, appointment.appointmentDate);
       return activeTab === "upcoming" && normalizeStatus(appointment.status) === "pending";
     }
-    appointmentDate.setHours(0, 0, 0, 0);
 
     const status = normalizeStatus(appointment.status);
 
     let tabMatch = false;
     if (activeTab === "upcoming") {
-      tabMatch = appointmentDate >= today && status === "pending";
+      tabMatch = appointmentDate.isSameOrAfter(today, 'day') && status === "pending";
+      console.log(`Filter upcoming - ID: ${appointment._id}, Date: ${appointmentDate.format()}, Status: ${status}, Match: ${tabMatch}`);
     } else if (activeTab === "past") {
-      tabMatch = appointmentDate < today || status === "completed" || status === "cancelled";
+      tabMatch = appointmentDate.isBefore(today, 'day') || status === "completed" || status === "cancelled";
+      console.log(`Filter past - ID: ${appointment._id}, Date: ${appointmentDate.format()}, Status: ${status}, Match: ${tabMatch}`);
     }
     if (!tabMatch) return false;
 
@@ -374,44 +424,58 @@ const Appointment = () => {
     return true;
   });
 
-  const stats = {
-    total: appointments.length,
-    upcoming: appointments.filter(
-      (app) =>
-        normalizeStatus(app.status) === "pending" &&
-        new Date(app.appointmentDate).setHours(0, 0, 0, 0) >= new Date().setHours(0, 0, 0, 0)
-    ).length,
-    completed: appointments.filter((app) => normalizeStatus(app.status) === "completed").length,
-    cancelled: appointments.filter((app) => normalizeStatus(app.status) === "cancelled").length,
-    past: appointments.filter(
-      (app) =>
-        new Date(app.appointmentDate).setHours(0, 0, 0, 0) < new Date().setHours(0, 0, 0, 0) ||
-        normalizeStatus(app.status) === "completed" ||
-        normalizeStatus(app.status) === "cancelled"
-    ).length,
-    averageRating: rating?.averageRating || "N/A",
+  // Pagination logic
+  const totalPages = Math.ceil(filteredAppointments.length / recordsPerPage);
+  const startIndex = (currentPage - 1) * recordsPerPage;
+  const endIndex = startIndex + recordsPerPage;
+  const paginatedAppointments = filteredAppointments.slice(startIndex, endIndex);
+
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
-    try {
-      return new Date(dateString).toLocaleString("vi-VN", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZone: "Asia/Ho_Chi_Minh",
-      });
-    } catch {
-      return "N/A";
+  const getPageNumbers = () => {
+    const maxPagesToShow = 5;
+    const pages = [];
+    let startPage = Math.max(1, currentPage - 2);
+    let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+
+    if (endPage - startPage + 1 < maxPagesToShow) {
+      startPage = Math.max(1, endPage - maxPagesToShow + 1);
     }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+
+    return pages;
+  };
+
+  const stats = {
+    total: appointments.length,
+    upcoming: appointments.filter((app) => {
+      const date = parseDate(app.appointmentDate);
+      const match = date && normalizeStatus(app.status) === "pending" && date.isSameOrAfter(moment().tz('Asia/Ho_Chi_Minh').startOf('day'), 'day');
+      console.log(`Stats upcoming - ID: ${app._id}, Date: ${date ? date.format() : 'N/A'}, Match: ${match}`);
+      return match;
+    }).length,
+    completed: appointments.filter((app) => normalizeStatus(app.status) === "completed").length,
+    cancelled: appointments.filter((app) => normalizeStatus(app.status) === "cancelled").length,
+    past: appointments.filter((app) => {
+      const date = parseDate(app.appointmentDate);
+      const match = date && (date.isBefore(moment().tz('Asia/Ho_Chi_Minh').startOf('day'), 'day') || normalizeStatus(app.status) === "completed" || normalizeStatus(app.status) === "cancelled");
+      console.log(`Stats past - ID: ${app._id}, Date: ${date ? date.format() : 'N/A'}, Match: ${match}`);
+      return match;
+    }).length,
+    averageRating: rating?.averageRating || "N/A",
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 p-4 sm:p-6 font-sans">
       <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-8 animate-fade-in">
-        Bảng Điều Khiển Lịch Hẹn
+        Quản Lý Lịch Hẹn
       </h1>
 
       {/* Thống kê tổng quan */}
@@ -471,9 +535,8 @@ const Appointment = () => {
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 text-sm font-semibold transition-colors duration-200 border-b-2 ${activeTab === tab.id ? "border-blue-600 text-blue-600" : "border-transparent text-gray-600 hover:text-blue-500"
-                }`}
+              onClick={() => { setActiveTab(tab.id); setCurrentPage(1); }}
+              className={`px-4 py-2 text-sm font-semibold transition-colors duration-200 border-b-2 ${activeTab === tab.id ? "border-blue-600 text-blue-600" : "border-transparent text-gray-600 hover:text-blue-500"}`}
               aria-selected={activeTab === tab.id}
               title={tab.label}
             >
@@ -492,7 +555,7 @@ const Appointment = () => {
               <label className="text-sm font-semibold text-gray-700">Trạng thái:</label>
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition bg-white"
                 aria-label="Lọc theo trạng thái"
                 title="Lọc theo trạng thái"
@@ -508,7 +571,7 @@ const Appointment = () => {
                 type="text"
                 placeholder="Tìm kiếm bệnh nhân (tên hoặc email)..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                 className="w-full border border-gray-300 rounded-lg px-4 py-2 pl-10 focus:ring-2 focus:ring-blue-500 focus:outline-none transition bg-white"
                 aria-label="Tìm kiếm bệnh nhân"
                 title="Tìm kiếm bệnh nhân"
@@ -553,63 +616,103 @@ const Appointment = () => {
               )}
             </div>
           ) : (
-            <div className="bg-white bg-opacity-90 rounded-2xl shadow-xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-100">
-                  <thead className="bg-gradient-to-r from-gray-50 to-gray-100 sticky top-0 z-10">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-100">
-                        Bệnh Nhân
-                      </th>
-                      <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-100">
-                        Ngày Giờ
-                      </th>
-                      <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-100">
-                        Ghi Chú
-                      </th>
-                      <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 uppercase tracking-wider">
-                        Trạng Thái
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {filteredAppointments.map((appointment, index) => {
-                      const patient = patientNames[appointment._id] || {};
+            <>
+              <div className="bg-white bg-opacity-90 rounded-2xl shadow-xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-100">
+                    <thead className="bg-gradient-to-r from-gray-50 to-gray-100 sticky top-0 z-10">
+                      <tr>
+                        <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-100">
+                          Bệnh Nhân
+                        </th>
+                        <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-100">
+                          Ngày Giờ
+                        </th>
+                        <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-100">
+                          Ghi Chú
+                        </th>
+                        <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 uppercase tracking-wider">
+                          Trạng Thái
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {paginatedAppointments.map((appointment, index) => {
+                        const patient = patientNames[appointment._id] || {};
 
-                      return (
-                        <tr
-                          key={appointment._id}
-                          className={`transition-all duration-200 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gradient-to-r hover:from-blue-50 hover:to-white hover:border-l-2 hover:border-blue-200`}
-                        >
-                          <td className="px-6 py-5 whitespace-nowrap text-left border-r border-gray-100">
-                            <div>
-                              <div className="text-base font-medium text-gray-900">
-                                {patient.name || "Bệnh nhân không xác định"}
+                        return (
+                          <tr
+                            key={appointment._id}
+                            className={`transition-all duration-200 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gradient-to-r hover:from-blue-50 hover:to-white hover:border-l-2 hover:border-blue-200`}
+                          >
+                            <td className="px-6 py-5 whitespace-nowrap text-left border-r border-gray-100">
+                              <div>
+                                <div className="text-base font-medium text-gray-900">
+                                  {patient.name || "Bệnh nhân không xác định"}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  {patient.email || "Không có email"}
+                                </div>
                               </div>
-                              <div className="text-sm text-gray-500">
-                                {patient.email || "Không có email"}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-5 whitespace-nowrap text-base text-center text-gray-700 border-r border-gray-100">
-                            {formatDate(appointment.appointmentDate)}
-                          </td>
-                          <td className="px-6 py-5 text-base text-center text-gray-700 border-r border-gray-100">
-                            {appointment.notes || "Không có ghi chú"}
-                          </td>
-                          <td className="px-6 py-5 whitespace-nowrap text-center">
-                            <StatusBadge
-                              status={appointment.status}
-                              onClick={() => handleStatusClick(appointment._id, appointment.status)}
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                            </td>
+                            <td className="px-6 py-5 whitespace-nowrap text-base text-center text-gray-700 border-r border-gray-100">
+                              {formatDate(appointment.appointmentDate)}
+                            </td>
+                            <td className="px-6 py-5 text-base text-center text-gray-700 border-r border-gray-100">
+                              {appointment.notes || "Không có ghi chú"}
+                            </td>
+                            <td className="px-6 py-5 whitespace-nowrap text-center">
+                              <StatusBadge
+                                status={appointment.status}
+                                onClick={() => handleStatusClick(appointment._id, appointment.status)}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+
+              {/* Pagination controls */}
+              {totalPages > 1 && (
+                <div className="mt-6 flex justify-center items-center space-x-2">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition ${currentPage === 1 ? "bg-gray-200 text-gray-500 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}
+                    aria-label="Trang trước"
+                    title="Trang trước"
+                  >
+                    Trước
+                  </button>
+                  {getPageNumbers().map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => handlePageChange(page)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${currentPage === page ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                      aria-label={`Trang ${page}`}
+                      title={`Trang ${page}`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                  {totalPages > 5 && currentPage < totalPages - 2 && (
+                    <span className="px-4 py-2 text-sm text-gray-500">...</span>
+                  )}
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition ${currentPage === totalPages ? "bg-gray-200 text-gray-500 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}
+                    aria-label="Trang sau"
+                    title="Trang sau"
+                  >
+                    Sau
+                  </button>
+                </div>
+              )}
+            </>
           )}
 
           {/* Modal trạng thái */}

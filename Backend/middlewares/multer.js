@@ -6,18 +6,18 @@ const crypto = require('crypto');
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     let subdir;
-    if (req.path.includes('doctor')) {
+    if (req.path.includes('doctor') || req.originalUrl.includes('doctor')) {
       subdir = 'doctors';
-    } else if (req.path.includes('patient')) {
+    } else if (req.path.includes('patient') || req.originalUrl.includes('patient')) {
       subdir = 'misc';
-    } else if (req.path.includes('news')) {
+    } else if (req.path.includes('news') || req.originalUrl.includes('news')) {
       subdir = 'news';
-    } else if (req.path.includes('specialty')) {
+    } else if (req.path.includes('specialty') || req.originalUrl.includes('specialty')) {
       subdir = 'specialties';
     } else {
-      subdir = 'misc'; // Default for other routes
+      subdir = 'misc';
     }
-    const uploadPath = path.join(__dirname, '..', 'public', 'Uploads', subdir);
+    const uploadPath = path.join(__dirname, '..', 'public', 'images', 'uploads', subdir);
     try {
       fs.mkdirSync(uploadPath, { recursive: true });
       console.log(`Upload directory ensured: ${uploadPath}`);
@@ -44,7 +44,7 @@ const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (req, file, cb) => {
-    const filetypes = /jpeg|jpg|png|gif|webp/; // Add webp support
+    const filetypes = /jpeg|jpg|png|gif|webp/;
     const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = filetypes.test(file.mimetype);
     if (mimetype && extname) {

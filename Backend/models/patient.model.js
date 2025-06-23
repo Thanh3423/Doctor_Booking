@@ -1,61 +1,22 @@
 const mongoose = require("mongoose");
 
 const patientSchema = mongoose.Schema({
-    name: {
-        type: String,
-        required: true,
-        minLength: 3,
-        trim: true,
-    },
+    name: { type: String, required: true, minLength: 3, trim: true },
     email: {
-        type: String,
-        required: true,
-        unique: true,
-        trim: true,
-        lowercase: true,
-        match: [/^\S+@\S+\.\S+$/, "Vui lòng nhập email hợp lệ"],
+        type: String, required: true, unique: true, trim: true, lowercase: true,
+        match: [/^\S+@\S+\.\S+$/, "Vui lòng nhập email hợp lệ"]
     },
-    password: {
-        type: String,
-        required: true,
-        minLength: 6,
-    },
-    image: {
-        type: String,
-        default: "",
-    },
+    password: { type: String, required: true, minlength: 6 },
+    image: { type: String, default: "" },
     phoneNumber: {
-        type: String,
-        default: "",
-        match: [/^\+?\d{10,15}$/, "Định dạng số điện thoại không hợp lệ"],
+        type: String, default: "",
+        match: [/^\+?\d{10,15}$/, "Định dạng số điện thoại không hợp lệ"]
     },
-    address: {
-        type: String,
-        default: "",
-        trim: true,
-    },
-    reviews: [
-        {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Review",
-        },
-    ],
-    appointment: [
-        {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Appointment",
-        },
-    ],
-    medicalHistory: [
-        {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "medicalHistory", // Tham chiếu đến model medicalHistory
-        },
-    ],
-    createdAt: {
-        type: Date,
-        default: Date.now,
-    },
+    address: { type: String, default: "", trim: true },
+    reviews: [{ type: mongoose.Schema.Types.ObjectId, ref: "Review" },],
+    appointment: [{ type: mongoose.Schema.Types.ObjectId, ref: "Appointment" },],
+    medicalHistory: [{ type: mongoose.Schema.Types.ObjectId, ref: "medicalHistory" },],
+    createdAt: { type: Date, default: Date.now },
 });
 
 // Ensure indexes are created properly

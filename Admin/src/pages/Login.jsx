@@ -57,8 +57,8 @@ const LoginPage = () => {
         <div className="flex justify-center gap-4 mb-6">
           <button
             className={`px-4 py-2 text-lg font-medium rounded-lg ${role === "Admin"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-200 text-gray-800"
+              ? "bg-blue-600 text-white"
+              : "bg-gray-200 text-gray-800"
               }`}
             onClick={() => setRole("Admin")}
             aria-label="Chọn vai trò Quản trị viên"
@@ -68,8 +68,8 @@ const LoginPage = () => {
           </button>
           <button
             className={`px-4 py-2 text-lg font-medium rounded-lg ${role === "Doctor"
-                ? "bg-green-600 text-white"
-                : "bg-gray-200 text-gray-800"
+              ? "bg-green-600 text-white"
+              : "bg-gray-200 text-gray-800"
               }`}
             onClick={() => setRole("Doctor")}
             aria-label="Chọn vai trò Bác sĩ"

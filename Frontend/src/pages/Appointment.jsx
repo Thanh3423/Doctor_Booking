@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AppContext } from '../Context/AppContext';
@@ -165,10 +164,8 @@ function Appointment() {
         doctorId: docId,
         appointmentDate: formattedDate,
         timeslot: appointmentData.timeslot,
+        notes: appointmentData.notes.trim() || undefined, // Send undefined if notes is empty
       };
-      if (appointmentData.notes.trim()) {
-        payload.notes = appointmentData.notes.trim();
-      }
       console.log('[Appointment] Sending booking request:', payload);
       const response = await axios.post(
         `${backEndUrl}/patient/book-appointment`,
@@ -179,7 +176,8 @@ function Appointment() {
         }
       );
       console.log('[Appointment] Booking response:', response.data);
-      if (response.data.message === 'Đặt lịch hẹn thành công') {
+      if (response.data.success) {
+        // Changed to check response.data.success instead of message
         toast.success('Đặt lịch hẹn thành công!');
         navigate('/my-appointments');
       } else {
@@ -259,7 +257,7 @@ function Appointment() {
         <div className="flex flex-col md:flex-row gap-6">
           <div className="md:w-1/2 bg-white p-6 rounded-xl shadow-lg">
             <img
-              src={`${backEndUrl}/images/uploads/doctors/${doctor?.image?.split('/').pop() || 'fallback-doctor-image.jpg'}`}
+              src={`${backEndUrl}/images${doctor?.image || '/fallback-doctor-image.jpg'}`} // Adjusted image path
               alt={`BS. ${doctor?.name || 'Bác sĩ'}`}
               className="w-full h-48 object-cover rounded-lg mb-4"
               onError={(e) => (e.target.src = '/fallback-doctor-image.jpg')}
@@ -271,7 +269,7 @@ function Appointment() {
             <div className="space-y-2 text-gray-600">
               <p>
                 <span className="font-medium">Chuyên khoa:</span>{' '}
-                {doctor?.specialty?.name || 'Chưa xác định'}
+                {doctor?.specialty?.name || doctor?.specialty || 'Chưa xác định'}
               </p>
               <p>
                 <span className="font-medium">Email:</span>{' '}
@@ -339,7 +337,7 @@ function Appointment() {
                   <option value="">
                     {availableSlots.length === 0
                       ? appointmentData.appointmentDate
-                        ? error || 'Không có slot trống'
+                        ? error || 'Không có khung giờ trống'
                         : 'Chọn ngày trước'
                       : 'Chọn thời gian'}
                   </option>

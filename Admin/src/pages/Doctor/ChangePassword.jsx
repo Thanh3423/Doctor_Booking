@@ -80,7 +80,7 @@ const ChangePassword = () => {
                             placeholder="Nhập mật khẩu cũ"
                             value={oldPassword}
                             onChange={(e) => setOldPassword(e.target.value)}
-                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none"
+                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                             required
                         />
                     </div>
@@ -91,7 +91,7 @@ const ChangePassword = () => {
                             placeholder="Nhập mật khẩu mới"
                             value={newPassword}
                             onChange={(e) => setNewPassword(e.target.value)}
-                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none"
+                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                             required
                         />
                     </div>
@@ -102,13 +102,13 @@ const ChangePassword = () => {
                             placeholder="Xác nhận mật khẩu mới"
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
-                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none"
+                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                             required
                         />
                     </div>
                     <button
                         type="submit"
-                        className={`w-full py-3 mt-4 text-white font-semibold rounded-lg ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-teal-600 hover:bg-teal-700"
+                        className={`w-full py-3 mt-4 text-white font-semibold rounded-lg ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
                             } transition duration-200`}
                         disabled={loading}
                     >

@@ -328,6 +328,12 @@ const bookAppointment = async (req, res) => {
       return res.status(400).json({ success: false, message: error.details[0].message });
     }
 
+    // Check if user is authenticated
+    if (!req.user?.id) {
+      console.error('[bookAppointment] No user ID in request');
+      return res.status(401).json({ success: false, message: 'Không xác thực được người dùng' });
+    }
+
     const { doctorId, appointmentDate, timeslot, notes } = req.body;
     const patientId = req.user.id;
 
@@ -422,7 +428,7 @@ const bookAppointment = async (req, res) => {
       code: error.code,
       name: error.name,
       request: req.body,
-      patientId,
+      patientId: req.user?.id || 'undefined', // Safely handle patientId
     });
     if (error.code === 11000) {
       return res.status(400).json({ success: false, message: 'Khung giờ này đã được đặt' });

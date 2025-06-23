@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useContext, useRef } from "react";
 import { Trash2, Search, X, Eye, Edit, Camera } from "lucide-react";
 import { AdminContext } from '../../context/AdminContext';
@@ -27,8 +26,28 @@ const PatientsPage = () => {
     const [imagePreview, setImagePreview] = useState(null);
     const { backendUrl, aToken, logout } = useContext(AdminContext);
     const fileInputRef = useRef(null);
-    // In fetchPatients (useEffect)
 
+    // Helper function to get full image URL
+    const getImageUrl = (imagePath) => {
+        if (!imagePath || imagePath === '') {
+            console.warn('[PatientsPage] Image path is empty or invalid, using default image');
+            return DEFAULT_IMAGE;
+        }
+        if (imagePath.startsWith('data:') || imagePath.startsWith('http')) {
+            return imagePath;
+        }
+        const url = `${backendUrl}${imagePath.startsWith('/') ? '' : '/'}${imagePath}`;
+        console.log('[PatientsPage] Generated image URL:', url);
+        return url;
+    };
+
+    // Handle image load error
+    const handleImageError = (e) => {
+        console.warn('[PatientsPage] Image failed to load:', e.target.src);
+        e.target.src = DEFAULT_IMAGE;
+    };
+
+    // Fetch patients
     useEffect(() => {
         const fetchPatients = async () => {
             setIsLoading(true);
@@ -36,19 +55,19 @@ const PatientsPage = () => {
                 if (!aToken || !backendUrl) {
                     throw new Error("Thiếu token hoặc backendUrl");
                 }
-                console.log("Fetching patients with token:", aToken);
+                console.log("[PatientsPage] Fetching patients with token:", aToken);
                 const response = await axios.get(`${backendUrl}/admin/patient/all`, {
                     headers: { Authorization: `Bearer ${aToken}` },
                 });
                 if (response.data?.success && Array.isArray(response.data.data)) {
                     setPatients(response.data.data);
                 } else {
-                    console.warn("Unexpected response format:", response.data);
+                    console.warn("[PatientsPage] Unexpected response format:", response.data);
                     setPatients([]);
                     toast.error("Dữ liệu bệnh nhân không đúng định dạng.");
                 }
             } catch (error) {
-                console.error("Error fetching patients:", {
+                console.error("[PatientsPage] Error fetching patients:", {
                     message: error.message,
                     response: error.response?.data,
                     status: error.response?.status,
@@ -70,7 +89,7 @@ const PatientsPage = () => {
         if (aToken && backendUrl) {
             fetchPatients();
         } else {
-            console.warn("Missing aToken or backendUrl:", { aToken, backendUrl });
+            console.warn("[PatientsPage] Missing aToken or backendUrl:", { aToken, backendUrl });
             setIsLoading(false);
             toast.error("Cấu hình không hợp lệ. Vui lòng kiểm tra đăng nhập.");
         }
@@ -88,7 +107,10 @@ const PatientsPage = () => {
         if (file) {
             setFormData({ ...formData, image: file });
             const reader = new FileReader();
-            reader.onload = () => setImagePreview(reader.result);
+            reader.onload = () => {
+                console.log('[PatientsPage] Image preview loaded:', reader.result.substring(0, 50) + '...');
+                setImagePreview(reader.result);
+            };
             reader.readAsDataURL(file);
         }
     };
@@ -112,6 +134,12 @@ const PatientsPage = () => {
 
     // Open edit modal
     const openEditModal = (patient) => {
+        console.log('[PatientsPage] Opening edit modal for patient:', {
+            id: patient._id,
+            name: patient.name,
+            image: patient.image,
+            imageUrl: getImageUrl(patient.image),
+        });
         setFormData({
             name: patient.name || "",
             email: patient.email || "",
@@ -120,7 +148,9 @@ const PatientsPage = () => {
             address: patient.address || "",
             image: null,
         });
-        setImagePreview(patient.image || null);
+        const previewUrl = getImageUrl(patient.image);
+        console.log('[PatientsPage] Setting image preview for edit:', previewUrl);
+        setImagePreview(previewUrl);
         setSelectedPatient(patient);
         setShowEditModal(true);
     };
@@ -193,7 +223,7 @@ const PatientsPage = () => {
             setSelectedPatient(null);
             resetForm();
         } catch (error) {
-            console.error("Error updating patient:", {
+            console.error("[PatientsPage] Error updating patient:", {
                 message: error.message,
                 response: error.response?.data,
                 status: error.response?.status,
@@ -223,6 +253,7 @@ const PatientsPage = () => {
 
     // Confirm delete
     const confirmDelete = (patient) => {
+        console.log('[PatientsPage] Confirming delete for patient:', patient);
         setPatientToDelete(patient);
         setShowDeleteModal(true);
     };
@@ -237,7 +268,7 @@ const PatientsPage = () => {
         setIsLoading(true);
 
         try {
-            console.log(`Deleting patient with ID: ${patientToDelete._id}`);
+            console.log(`[PatientsPage] Deleting patient with ID: ${patientToDelete._id}`);
             const response = await axios.delete(`${backendUrl}/admin/patient/delete/${patientToDelete._id}`, {
                 headers: { Authorization: `Bearer ${aToken}` },
             });
@@ -246,7 +277,7 @@ const PatientsPage = () => {
             setShowDeleteModal(false);
             setPatientToDelete(null);
         } catch (error) {
-            console.error("Error deleting patient:", {
+            console.error("[PatientsPage] Error deleting patient:", {
                 message: error.message,
                 response: error.response?.data,
                 status: error.response?.status,
@@ -267,11 +298,11 @@ const PatientsPage = () => {
     // View patient
     const viewPatient = async (patient) => {
         try {
-            console.log(`Fetching patient details for ID: ${patient._id}`);
+            console.log(`[PatientsPage] Fetching patient details for ID: ${patient._id}`);
             const response = await axios.get(`${backendUrl}/admin/patient/${patient._id}`, {
                 headers: { Authorization: `Bearer ${aToken}` },
             });
-            console.log("Patient details response:", response.data);
+            console.log("[PatientsPage] Patient details response:", response.data);
             if (response.data?.success && response.data.data) {
                 setSelectedPatient(response.data.data);
                 setShowViewModal(true);
@@ -279,7 +310,7 @@ const PatientsPage = () => {
                 throw new Error("Dữ liệu bệnh nhân không đúng định dạng");
             }
         } catch (error) {
-            console.error("Error fetching patient details:", {
+            console.error("[PatientsPage] Error fetching patient details:", {
                 message: error.message,
                 response: error.response?.data,
                 status: error.response?.status,
@@ -423,29 +454,32 @@ const PatientsPage = () => {
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto modal-enter modal-enter-active">
                         <h3 className="text-lg font-semibold mb-4">Cập nhật thông tin bệnh nhân</h3>
-                        <form onSubmit={handleEdit} className="space-y-4">
+                        <form onSubmit={handleEdit} className="space-y-4" autoComplete="off">
                             <div className="flex justify-center">
                                 <div className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-gray-300">
-                                    <img
-                                        src={imagePreview || DEFAULT_IMAGE}
-                                        alt="Patient Preview"
-                                        className="object-cover w-full h-full"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={triggerFileInput}
-                                        className="absolute inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center hover:bg-opacity-70 transition text-white"
-                                        aria-label="Tải lên hình ảnh"
-                                    >
-                                        <Camera size={24} />
-                                    </button>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        ref={fileInputRef}
-                                        className="hidden"
-                                        onChange={handleImageChange}
-                                    />
+                                    <div className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-gray-300">
+                                        <img
+                                            src={imagePreview || getImageUrl(selectedPatient?.image) || DEFAULT_IMAGE}
+                                            alt="Patient Preview"
+                                            className="object-cover w-full h-full"
+                                            onError={handleImageError}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={triggerFileInput}
+                                            className="absolute inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center hover:bg-opacity-70 transition text-white"
+                                            aria-label="Tải lên hình ảnh"
+                                        >
+                                            <Camera size={24} />
+                                        </button>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            ref={fileInputRef}
+                                            className="hidden"
+                                            onChange={handleImageChange}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -470,6 +504,7 @@ const PatientsPage = () => {
                                         onChange={handleChange}
                                         placeholder="Email bệnh nhân"
                                         required
+                                        autoComplete="off"
                                         className="mt-2 block w-full text-sm p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
@@ -481,6 +516,7 @@ const PatientsPage = () => {
                                         value={formData.password}
                                         onChange={handleChange}
                                         placeholder="Mật khẩu mới (để trống nếu không đổi)"
+                                        autoComplete="new-password"
                                         className="mt-2 block w-full text-sm p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
@@ -583,13 +619,19 @@ const PatientsPage = () => {
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto modal-enter modal-enter-active">
                         <h3 className="text-lg font-semibold mb-4">Chi tiết bệnh nhân</h3>
-                        {console.log('Selected Patient Data:', selectedPatient)} {/* Debug log */}
+                        {console.log('[PatientsPage] Selected Patient Data:', {
+                            id: selectedPatient._id,
+                            name: selectedPatient.name,
+                            image: selectedPatient.image,
+                            imageUrl: getImageUrl(selectedPatient.image),
+                        })}
                         <div className="space-y-4">
                             <div className="flex items-center space-x-4">
                                 <img
-                                    src={selectedPatient.image || DEFAULT_IMAGE}
+                                    src={getImageUrl(selectedPatient?.image) || DEFAULT_IMAGE}
                                     alt={selectedPatient.name}
                                     className="w-24 h-24 object-cover rounded-full border-2 border-gray-300"
+                                    onError={handleImageError}
                                 />
                                 <div>
                                     <h4 className="text-xl font-semibold text-gray-800">{selectedPatient.name}</h4>

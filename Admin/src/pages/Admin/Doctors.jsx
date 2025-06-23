@@ -33,9 +33,18 @@ const DoctorsPage = () => {
   const { aToken, backendUrl, logout, isTokenExpired } = useContext(AdminContext);
   const fileInputRef = useRef(null);
 
-  // Log context values for debugging
+  // Helper function to get full image URL
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return DEFAULT_IMAGE;
+    if (imagePath.startsWith('data:') || imagePath.startsWith('http')) return imagePath;
+    const url = `${backendUrl}${imagePath.startsWith('/') ? '' : '/'}${imagePath}`;
+    console.log('[DoctorsPage] Generated image URL:', url);
+    return url;
+  };
+
+  // Log context values and check token
   useEffect(() => {
-    console.log('AdminContext:', { aToken, backendUrl });
+    console.log('[DoctorsPage] AdminContext:', { aToken, backendUrl });
     if (!backendUrl) {
       toast.error('Backend URL không được cấu hình!');
       setIsLoading(false);
@@ -63,22 +72,20 @@ const DoctorsPage = () => {
           }),
         ]);
 
-        // Handle doctors response
-        console.log('Doctors Response:', doctorsResponse.data);
+        console.log('[DoctorsPage] Doctors Response:', doctorsResponse.data);
         if (doctorsResponse.data?.success && Array.isArray(doctorsResponse.data.data)) {
           setDoctors(doctorsResponse.data.data);
         } else {
-          console.warn('Unexpected doctors response format:', doctorsResponse.data);
+          console.warn('[DoctorsPage] Unexpected doctors response format:', doctorsResponse.data);
           setDoctors([]);
           toast.error('Dữ liệu bác sĩ không đúng định dạng.');
         }
 
-        // Handle specialties response
-        console.log('Specialties Response:', specialtiesResponse.data);
+        console.log('[DoctorsPage] Specialties Response:', specialtiesResponse.data);
         const specialtiesData = Array.isArray(specialtiesResponse.data) ? specialtiesResponse.data : [];
         setSpecialties(specialtiesData);
       } catch (error) {
-        console.error('Lỗi khi lấy dữ liệu:', error.response?.data || error.message);
+        console.error('[DoctorsPage] Lỗi khi lấy dữ liệu:', error.response?.data || error.message);
         if (error.response?.status === 400 || error.response?.status === 401 || error.response?.status === 403) {
           toast.error('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
           logout();
@@ -99,6 +106,7 @@ const DoctorsPage = () => {
       toast.error('Cấu hình không hợp lệ. Vui lòng kiểm tra đăng nhập.');
     }
   }, [aToken, backendUrl, logout]);
+
   // Handle form input change
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -111,7 +119,10 @@ const DoctorsPage = () => {
     if (file) {
       setFormData({ ...formData, image: file });
       const reader = new FileReader();
-      reader.onload = () => setImagePreview(reader.result);
+      reader.onload = () => {
+        console.log('[DoctorsPage] Image preview loaded:', reader.result.substring(0, 50) + '...');
+        setImagePreview(reader.result);
+      };
       reader.readAsDataURL(file);
     }
   };
@@ -145,7 +156,7 @@ const DoctorsPage = () => {
 
   // Open edit modal
   const openEditModal = (doctor) => {
-    console.log('Opening edit modal for doctor:', doctor);
+    console.log('[DoctorsPage] Opening edit modal for doctor:', doctor);
     setFormData({
       name: doctor.name || '',
       email: doctor.email || '',
@@ -158,7 +169,9 @@ const DoctorsPage = () => {
       fees: doctor.fees || '',
       image: null,
     });
-    setImagePreview(doctor.image || null);
+    const previewUrl = getImageUrl(doctor.image);
+    console.log('[DoctorsPage] Setting image preview for edit:', previewUrl);
+    setImagePreview(previewUrl);
     setSelectedDoctor(doctor);
     setShowEditModal(true);
   };
@@ -225,7 +238,7 @@ const DoctorsPage = () => {
       setShowAddModal(false);
       resetForm();
     } catch (error) {
-      console.error('Error adding doctor:', error.response?.data || error);
+      console.error('[DoctorsPage] Error adding doctor:', error.response?.data || error);
       if (error.response?.status === 400 || error.response?.status === 401 || error.response?.status === 403) {
         logout();
       } else {
@@ -282,7 +295,7 @@ const DoctorsPage = () => {
       setSelectedDoctor(null);
       resetForm();
     } catch (error) {
-      console.error('Error updating doctor:', error.response?.data || error);
+      console.error('[DoctorsPage] Error updating doctor:', error.response?.data || error);
       if (error.response?.status === 400 || error.response?.status === 401 || error.response?.status === 403) {
         logout();
       } else {
@@ -295,14 +308,14 @@ const DoctorsPage = () => {
 
   // View doctor
   const viewDoctor = (doctor) => {
-    console.log('Viewing doctor:', doctor);
+    console.log('[DoctorsPage] Viewing doctor:', doctor);
     setSelectedDoctor(doctor);
     setShowViewModal(true);
   };
 
   // Confirm delete
   const confirmDelete = (doctor) => {
-    console.log('Confirming delete for doctor:', doctor);
+    console.log('[DoctorsPage] Confirming delete for doctor:', doctor);
     setDoctorToDelete(doctor);
     setShowDeleteModal(true);
   };
@@ -325,7 +338,7 @@ const DoctorsPage = () => {
       setShowDeleteModal(false);
       setDoctorToDelete(null);
     } catch (error) {
-      console.error('Error deleting doctor:', {
+      console.error('[DoctorsPage] Error deleting doctor:', {
         status: error.response?.status,
         data: error.response?.data,
         message: error.message,
@@ -344,6 +357,12 @@ const DoctorsPage = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Handle image load error
+  const handleImageError = (e) => {
+    console.warn('[DoctorsPage] Image failed to load:', e.target.src);
+    e.target.src = DEFAULT_IMAGE;
   };
 
   if (isLoading && doctors.length === 0) {
@@ -501,13 +520,14 @@ const DoctorsPage = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto modal-enter modal-enter-active">
             <h3 className="text-lg font-semibold mb-4">Thêm bác sĩ</h3>
-            <form onSubmit={handleAdd} className="space-y-4">
+            <form onSubmit={handleAdd} className="space-y-4" autoComplete="off">
               <div className="flex justify-center">
                 <div className="relative w-24 h-24 rounded-md overflow-hidden border-2 border-gray-300">
                   <img
                     src={imagePreview || DEFAULT_IMAGE}
                     alt="Doctor Preview"
                     className="object-cover w-full h-full"
+                    onError={handleImageError}
                   />
                   <button
                     type="button"
@@ -548,6 +568,7 @@ const DoctorsPage = () => {
                     onChange={handleChange}
                     placeholder="Email bác sĩ"
                     required
+                    autoComplete="off"
                     className="mt-2 block w-full text-sm p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400"
                   />
                 </div>
@@ -560,6 +581,7 @@ const DoctorsPage = () => {
                     onChange={handleChange}
                     placeholder="Mật khẩu (ít nhất 6 ký tự)"
                     required
+                    autoComplete="new-password"
                     className="mt-2 block w-full text-sm p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400"
                   />
                 </div>
@@ -676,6 +698,7 @@ const DoctorsPage = () => {
                     src={imagePreview || DEFAULT_IMAGE}
                     alt="Doctor Preview"
                     className="object-cover w-full h-full"
+                    onError={handleImageError}
                   />
                   <button
                     type="button"
@@ -885,9 +908,10 @@ const DoctorsPage = () => {
             <div className="space-y-4">
               <div className="flex items-center space-x-4">
                 <img
-                  src={selectedDoctor.image || DEFAULT_IMAGE}
+                  src={getImageUrl(selectedDoctor.image)}
                   alt={selectedDoctor.name}
                   className="w-24 h-24 object-cover rounded-full border-2 border-gray-300"
+                  onError={handleImageError}
                 />
                 <div>
                   <h4 className="text-xl font-semibold text-gray-800">{selectedDoctor.name}</h4>

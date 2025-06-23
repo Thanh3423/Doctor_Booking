@@ -151,22 +151,30 @@ const addManyDoctors = async (req, res) => {
 
 const getDoctorData = async (req, res) => {
   try {
-    const { id } = req.params;
-
-    if (!id) {
-      return res.status(400).json({ message: "ID bác sĩ là bắt buộc." });
+    const doctorId = req.params.id;
+    console.log('[getDoctorData] Fetching profile for doctorId:', doctorId);
+    if (!mongoose.Types.ObjectId.isValid(doctorId)) {
+      return res.status(400).json({ success: false, message: 'ID bác sĩ không hợp lệ' });
     }
-
-    const doctor = await doctorModel.findById(id).populate('specialty', 'name');
-
+    const doctor = await doctorModel
+      .findById(doctorId)
+      .select('-password')
+      .populate('specialty', 'name');
     if (!doctor) {
-      return res.status(404).json({ message: "Không tìm thấy bác sĩ." });
+      console.log('[getDoctorData] Doctor not found:', doctorId);
+      return res.status(404).json({ success: false, message: 'Bác sĩ không tồn tại' });
     }
-
-    res.status(200).json({ success: true, data: doctor });
+    const doctorData = {
+      ...doctor.toObject(),
+      image: doctor.image || null, // Return filename or null
+      specialty: doctor.specialty?._id.toString() || '',
+      specialtyName: doctor.specialty?.name || 'Không xác định',
+    };
+    console.log('[getDoctorData] Profile fetched successfully:', doctorData);
+    return res.status(200).json({ success: true, data: doctorData });
   } catch (error) {
-    console.error("Lỗi khi lấy thông tin bác sĩ:", error);
-    res.status(500).json({ message: "Lỗi máy chủ.", error: error.message });
+    console.error('[getDoctorData] Error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi lấy hồ sơ bác sĩ', error: error.message });
   }
 };
 
@@ -433,56 +441,98 @@ const deleteAppointment = async (req, res) => {
 const getId = async (req, res) => {
   try {
     const doctorId = req.user?.id;
+    console.log('[getId] Fetching ID for user:', { doctorId });
     if (!doctorId) {
-      return res.status(401).json({ message: "Không được phép: Thiếu ID bác sĩ." });
+      console.warn('[getId] Missing doctorId in req.user');
+      return res.status(401).json({ success: false, message: "Không được phép: Thiếu ID bác sĩ." });
     }
-    res.status(200).json({ id: doctorId });
+    console.log('[getId] Sending response:', { success: true, id: doctorId });
+    res.status(200).json({ success: true, id: doctorId });
   } catch (error) {
-    console.error("Lỗi khi lấy ID bác sĩ:", error);
-    res.status(500).json({ message: "Lỗi máy chủ.", error: error.message });
+    console.error('[getId] Error:', error);
+    res.status(500).json({ success: false, message: "Lỗi máy chủ.", error: error.message });
   }
 };
 
 const updateProfile = async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+    const { specialty, experience, fees, about, phone, location } = req.body;
+    console.log('[updateProfile] Updating doctor:', { id, specialty, experience, fees, about, phone, location });
 
-    const updatedDoctor = await doctorModel.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    }).populate('specialty', 'name');
-
-    if (!updatedDoctor) {
-      return res.status(404).json({ message: "Không tìm thấy bác sĩ." });
+    // Validate specialty
+    if (specialty && !mongoose.Types.ObjectId.isValid(specialty)) {
+      return res.status(400).json({ success: false, message: 'Chuyên khoa không hợp lệ' });
+    }
+    if (specialty) {
+      const specialtyExists = await specialtyModel.findById(specialty);
+      if (!specialtyExists) {
+        return res.status(400).json({ success: false, message: 'Chuyên khoa không tồn tại' });
+      }
     }
 
-    res.status(200).json({ message: "Cập nhật hồ sơ thành công.", updatedProfile: updatedDoctor });
+    // Build update data
+    const updateData = {
+      ...(specialty && { specialty }),
+      ...(experience !== undefined && { experience: Number(experience) }),
+      ...(fees !== undefined && { fees: Number(fees) }),
+      ...(about && { about: about.trim() }),
+      ...(phone !== undefined && { phone: phone.trim() }),
+      ...(location !== undefined && { location: location.trim() }),
+    };
+
+    const updatedDoctor = await doctorModel
+      .findByIdAndUpdate(id, updateData, {
+        new: true,
+        runValidators: true,
+      })
+      .select('-password')
+      .populate('specialty', 'name');
+
+    if (!updatedDoctor) {
+      console.warn('[updateProfile] Doctor not found:', id);
+      return res.status(404).json({ success: false, message: 'Bác sĩ không tồn tại' });
+    }
+
+    const doctorData = {
+      ...updatedDoctor.toObject(),
+      specialty: updatedDoctor.specialty?._id.toString() || '',
+      specialtyName: updatedDoctor.specialty?.name || 'Không xác định',
+    };
+
+    console.log('[updateProfile] Updated doctor:', doctorData);
+    res.status(200).json({ success: true, updatedProfile: doctorData });
   } catch (error) {
-    console.error("Lỗi khi cập nhật hồ sơ:", error);
-    res.status(500).json({ message: "Lỗi máy chủ.", error: error.message });
+    console.error('[updateProfile] Error:', error);
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: 'Dữ liệu không hợp lệ' });
+    }
+    res.status(500).json({ success: false, message: 'Lỗi máy chủ', error: error.message });
   }
 };
 
 const uploadImage = async (req, res) => {
   try {
+    const doctorId = req.params.id;
+    console.log('[uploadImage] Uploading image for doctorId:', doctorId);
+    if (!mongoose.Types.ObjectId.isValid(doctorId)) {
+      return res.status(400).json({ success: false, message: 'ID bác sĩ không hợp lệ' });
+    }
     if (!req.file) {
-      return res.status(400).json({ message: "Chưa chọn hình ảnh." });
+      return res.status(400).json({ success: false, message: 'Không có tệp được tải lên' });
     }
-    const imageUrl = req.file.filename;
-    console.log("Tệp đã tải lên:", req.file);
-    const doctor = await doctorModel.findByIdAndUpdate(
-      req.params.id,
-      { image: imageUrl },
-      { new: true }
-    ).populate("specialty", "name");
+    const doctor = await doctorModel.findById(doctorId);
     if (!doctor) {
-      return res.status(404).json({ message: "Không tìm thấy bác sĩ." });
+      return res.status(404).json({ success: false, message: 'Bác sĩ không tồn tại' });
     }
-    res.status(200).json({ message: "Cập nhật hình ảnh hồ sơ thành công.", imageUrl });
+    const imagePath = req.file.filename; // Store only the filename
+    doctor.image = imagePath;
+    await doctor.save();
+    console.log('[uploadImage] Image uploaded successfully:', imagePath);
+    return res.status(200).json({ success: true, imageUrl: imagePath }); // Return filename only
   } catch (error) {
-    console.error("Lỗi khi tải hình ảnh lên:", error);
-    res.status(500).json({ message: "Lỗi máy chủ.", error: error.message });
+    console.error('[uploadImage] Error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi tải ảnh lên', error: error.message });
   }
 };
 

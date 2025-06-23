@@ -69,17 +69,15 @@ const registerAdmin = async (req, res) => {
 
 const getAllSchedules = async (req, res) => {
     try {
-        const { weekStartDate, month } = req.query;
+        const { weekStartDate } = req.query;
         let query = {};
 
         if (weekStartDate) {
             const startDate = moment.tz(weekStartDate, 'Asia/Ho_Chi_Minh').startOf('week').toDate();
             query.weekStartDate = startDate;
-        } else if (month) {
-            const [year, monthNum] = month.split('-').map(Number);
-            const startOfMonth = moment.tz([year, monthNum - 1], 'Asia/Ho_Chi_Minh').startOf('month');
-            const endOfMonth = startOfMonth.clone().endOf('month');
-            query.weekStartDate = { $gte: startOfMonth.toDate(), $lte: endOfMonth.toDate() };
+            console.log('[getAllSchedules] Filtering by weekStartDate:', startDate);
+        } else {
+            console.log('[getAllSchedules] No weekStartDate provided, fetching all schedules');
         }
 
         const schedules = await scheduleModel
@@ -87,9 +85,10 @@ const getAllSchedules = async (req, res) => {
             .populate('doctorId', 'name email')
             .sort({ weekStartDate: -1, createdAt: -1 });
 
+        console.log('[getAllSchedules] Fetched schedules count:', schedules.length);
         res.status(200).json({ success: true, data: schedules });
     } catch (error) {
-        console.error('Error fetching schedules:', error);
+        console.error('[getAllSchedules] Error fetching schedules:', error);
         res.status(500).json({ message: 'Lỗi server khi lấy lịch', error: error.message });
     }
 };
@@ -474,7 +473,7 @@ const addDoctor = async (req, res) => {
             experience,
             about,
             fees,
-            image: `/Uploads/doctors/${req.file.filename}`,
+            image: `/images/uploads/doctors/${req.file.filename}`,
             phone: phone || '',
         });
 
@@ -541,7 +540,7 @@ const editDoctor = async (req, res) => {
         }
 
         if (req.file) {
-            updateData.image = `/Uploads/doctors/${req.file.filename}`;
+            updateData.image = `/images/uploads/doctors/${req.file.filename}`;
         } else if (existingImage) {
             updateData.image = existingImage;
         } else {
@@ -798,12 +797,13 @@ const editPatient = async (req, res) => {
             updateData.password = await bcrypt.hash(password, 10);
         }
 
+        // Xử lý ảnh
         if (req.file) {
-            updateData.image = `/Uploads/patients/${req.file.filename}`;
+            updateData.image = `/images/uploads/misc/${req.file.filename}`;
         } else if (existingImage) {
             updateData.image = existingImage;
         } else {
-            updateData.image = patient.image || '';
+            updateData.image = patient.image || ''; // Giữ ảnh cũ nếu không có ảnh mới hoặc existingImage
         }
 
         const updatedPatient = await patientModel.findByIdAndUpdate(id, updateData, {
@@ -819,10 +819,10 @@ const editPatient = async (req, res) => {
                 email: updatedPatient.email,
                 phoneNumber: updatedPatient.phoneNumber,
                 address: updatedPatient.address,
-                image: updatedPatient.image,
-                reviews: updatedPatient.reviews,
-                medicalHistory: updatedPatient.medicalHistory,
-                appointment: updatedPatient.appointment,
+                image: updatedPatient.image || '', // Đảm bảo image luôn là chuỗi
+                reviews: updatedPatient.reviews || [],
+                medicalHistory: updatedPatient.medicalHistory || [],
+                appointment: updatedPatient.appointment || [],
                 createdAt: updatedPatient.createdAt,
             },
         });
@@ -842,7 +842,7 @@ const addSpecialty = async (req, res) => {
         const specialtyData = {
             name,
             description: description || '',
-            image: req.file ? `/Uploads/specialties/${req.file.filename}` : 'https://via.placeholder.com/150',
+            image: req.file ? `/images/uploads/specialties/${req.file.filename}` : 'https://via.placeholder.com/150',
         };
 
         const specialty = new specialtyModel(specialtyData);
@@ -871,7 +871,7 @@ const updateSpecialty = async (req, res) => {
         };
 
         if (req.file) {
-            specialtyData.image = `/Uploads/specialties/${req.file.filename}`;
+            specialtyData.image = `/images/uploads/specialties/${req.file.filename}`;
         } else if (existingImage) {
             specialtyData.image = existingImage;
         } else {
@@ -944,7 +944,7 @@ const addNews = async (req, res) => {
             category: category || 'Other',
             status: status || 'draft',
             publishAt: publishAt ? new Date(publishAt) : null,
-            image: req.file ? `/Uploads/news/${req.file.filename}` : ' ',
+            image: req.file ? `/images/uploads/news/${req.file.filename}` : ' ',
         };
 
         const news = new newsModel(newsData);
@@ -977,7 +977,7 @@ const updateNews = async (req, res) => {
         };
 
         if (req.file) {
-            newsData.image = `/Uploads/news/${req.file.filename}`;
+            newsData.image = `/images/uploads/news/${req.file.filename}`;
         } else if (existingImage) {
             newsData.image = existingImage;
         } else {

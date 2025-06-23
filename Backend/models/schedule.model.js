@@ -8,20 +8,12 @@ const scheduleSchema = new mongoose.Schema({
     year: { type: Number, required: true },
     availability: [
         {
-            day: {
-                type: String,
-                required: true,
-                enum: ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'],
-            },
+            day: { type: String, required: true, enum: ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'] },
             date: { type: Date, required: true },
             isAvailable: { type: Boolean, default: true },
             timeSlots: [
                 {
-                    time: {
-                        type: String,
-                        required: true,
-                        match: [/^\d{2}:\d{2}-\d{2}:\d{2}$/, "Invalid time format (e.g., '09:00-10:00')"],
-                    },
+                    time: { type: String, required: true, match: [/^\d{2}:\d{2}-\d{2}:\d{2}$/] },
                     isBooked: { type: Boolean, default: false },
                     isAvailable: { type: Boolean, default: true },
                     patientId: { type: mongoose.Schema.Types.ObjectId, ref: "Patient", default: null },

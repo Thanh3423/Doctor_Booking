@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { Search, X, Plus, Edit, Trash2, Eye, Calendar, CheckCircle, XCircle } from 'lucide-react';
-import { AdminContext } from '../../context/AdminContext';
+import { AppContext } from '../../context/AppContext';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import moment from 'moment-timezone';
@@ -18,10 +18,9 @@ const AdminSchedulePage = () => {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [showViewModal, setShowViewModal] = useState(false);
     const [selectedSchedule, setSelectedSchedule] = useState(null);
-    const [filterWeek, setFilterWeek] = useState(moment().tz('Asia/Ho_Chi_Minh').startOf('week').format('YYYY-MM-DD'));
-    const [filterMonth, setFilterMonth] = useState(moment().tz('Asia/Ho_Chi_Minh').format('YYYY-MM'));
+    const [filterWeek, setFilterWeek] = useState(''); // Initialize as empty
 
-    const { aToken, backendUrl } = useContext(AdminContext);
+    const { aToken, backEndUrl } = useContext(AppContext);
 
     // Initialize availability with correct day names and dates
     const initializeAvailability = (weekStart) => {
@@ -45,18 +44,23 @@ const AdminSchedulePage = () => {
         const fetchData = async () => {
             setIsLoading(true);
             try {
+                const schedulesUrl = filterWeek
+                    ? `${backEndUrl}/admin/schedules?weekStartDate=${filterWeek}`
+                    : `${backEndUrl}/admin/schedules`;
+                console.log('[AdminSchedulePage] Fetching schedules with URL:', schedulesUrl);
                 const [schedulesRes, doctorsRes] = await Promise.all([
-                    axios.get(`${backendUrl}/admin/schedules?month=${filterMonth}`, {
+                    axios.get(schedulesUrl, {
                         headers: { Authorization: `Bearer ${aToken}` },
                     }),
-                    axios.get(`${backendUrl}/admin/doctor`, {
+                    axios.get(`${backEndUrl}/admin/doctor`, {
                         headers: { Authorization: `Bearer ${aToken}` },
                     }),
                 ]);
                 setSchedules(Array.isArray(schedulesRes.data.data) ? schedulesRes.data.data : []);
                 setDoctors(Array.isArray(doctorsRes.data.data) ? doctorsRes.data.data : []);
+                console.log('[AdminSchedulePage] Fetched schedules:', schedulesRes.data.data);
             } catch (error) {
-                console.error('Error fetching data:', error);
+                console.error('[AdminSchedulePage] Error fetching data:', error);
                 toast.error(error.response?.data?.message || 'Không thể tải dữ liệu.');
                 setDoctors([]);
                 setSchedules([]);
@@ -64,8 +68,8 @@ const AdminSchedulePage = () => {
                 setIsLoading(false);
             }
         };
-        if (aToken && backendUrl) fetchData();
-    }, [aToken, backendUrl, filterMonth]);
+        if (aToken && backEndUrl) fetchData();
+    }, [aToken, backEndUrl, filterWeek]);
 
     const handleTimeSlotInputChange = (day, value) => {
         const updatedAvailability = formData.availability.map(item =>
@@ -102,16 +106,19 @@ const AdminSchedulePage = () => {
     };
 
     const handleWeekChange = (e) => {
-        const weekStart = moment.tz(e.target.value, 'Asia/Ho_Chi_Minh').startOf('week');
-        const updatedAvailability = initializeAvailability(weekStart);
-        setFormData({ ...formData, weekStartDate: e.target.value, availability: updatedAvailability });
-        setFilterWeek(e.target.value);
-        setFilterMonth(weekStart.format('YYYY-MM'));
-    };
-
-    const handleMonthChange = (e) => {
-        setFilterMonth(e.target.value);
-        setFilterWeek(moment.tz(e.target.value, 'Asia/Ho_Chi_Minh').startOf('month').startOf('week').format('YYYY-MM-DD'));
+        const value = e.target.value;
+        setFilterWeek(value);
+        if (value) {
+            const weekStart = moment.tz(value, 'Asia/Ho_Chi_Minh').startOf('week');
+            const updatedAvailability = initializeAvailability(weekStart);
+            setFormData({ ...formData, weekStartDate: value, availability: updatedAvailability });
+        } else {
+            setFormData({
+                ...formData,
+                weekStartDate: moment().tz('Asia/Ho_Chi_Minh').startOf('week').format('YYYY-MM-DD'),
+                availability: initializeAvailability(moment().tz('Asia/Ho_Chi_Minh').startOf('week')),
+            });
+        }
     };
 
     const resetForm = () => {
@@ -134,7 +141,6 @@ const AdminSchedulePage = () => {
                     }
                 }
             }
-            // Validate that day matches date
             const expectedDay = moment.tz(item.date, 'Asia/Ho_Chi_Minh').format('dddd');
             const daysMap = {
                 'Monday': 'Thứ 2',
@@ -175,7 +181,7 @@ const AdminSchedulePage = () => {
                     timeSlots: item.isAvailable ? item.timeSlots : [],
                 })),
             };
-            const response = await axios.post(`${backendUrl}/admin/schedules`, payload, {
+            const response = await axios.post(`${backEndUrl}/admin/schedules`, payload, {
                 headers: { Authorization: `Bearer ${aToken}` },
             });
             setSchedules([...schedules, response.data.schedule]);
@@ -183,7 +189,7 @@ const AdminSchedulePage = () => {
             setShowAddModal(false);
             resetForm();
         } catch (error) {
-            console.error('Error creating schedule:', error);
+            console.error('[AdminSchedulePage] Error creating schedule:', error);
             toast.error(error.response?.data?.message || 'Không thể tạo lịch.');
         } finally {
             setIsLoading(false);
@@ -235,7 +241,7 @@ const AdminSchedulePage = () => {
                 })),
             };
             const response = await axios.put(
-                `${backendUrl}/admin/schedules/${selectedSchedule._id}`,
+                `${backEndUrl}/admin/schedules/${selectedSchedule._id}`,
                 payload,
                 { headers: { Authorization: `Bearer ${aToken}` } }
             );
@@ -245,7 +251,7 @@ const AdminSchedulePage = () => {
             setSelectedSchedule(null);
             resetForm();
         } catch (error) {
-            console.error('Error updating schedule:', error);
+            console.error('[AdminSchedulePage] Error updating schedule:', error);
             toast.error(error.response?.data?.message || 'Không thể cập nhật lịch.');
         } finally {
             setIsLoading(false);
@@ -260,7 +266,7 @@ const AdminSchedulePage = () => {
     const handleDelete = async () => {
         setIsLoading(true);
         try {
-            await axios.delete(`${backendUrl}/admin/schedules/${selectedSchedule._id}`, {
+            await axios.delete(`${backEndUrl}/admin/schedules/${selectedSchedule._id}`, {
                 headers: { Authorization: `Bearer ${aToken}` },
             });
             setSchedules(schedules.filter(s => s._id !== selectedSchedule._id));
@@ -268,7 +274,7 @@ const AdminSchedulePage = () => {
             setShowDeleteModal(false);
             setSelectedSchedule(null);
         } catch (error) {
-            console.error('Error deleting schedule:', error);
+            console.error('[AdminSchedulePage] Error deleting schedule:', error);
             toast.error(error.response?.data?.message || 'Không thể xóa lịch.');
         } finally {
             setIsLoading(false);
@@ -291,11 +297,6 @@ const AdminSchedulePage = () => {
         schedule.doctorId.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         schedule.doctorId.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
-
-    // Format month display in Vietnamese
-    const formatMonthDisplay = (month) => {
-        return moment(month, 'YYYY-MM').format('MMMM YYYY').replace(/^\w/, c => c.toUpperCase());
-    };
 
     if (isLoading && schedules.length === 0) {
         return (
@@ -323,25 +324,24 @@ const AdminSchedulePage = () => {
                     </button>
                 </div>
 
-                <div className="flex gap-4 mb-6">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Lọc theo tuần</label>
+                <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700">Lọc theo tuần</label>
+                    <div className="flex items-center gap-2">
                         <input
                             type="date"
                             value={filterWeek}
                             onChange={handleWeekChange}
                             className="mt-1 p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
                         />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Lọc theo tháng</label>
-                        <input
-                            type="month"
-                            value={filterMonth}
-                            onChange={handleMonthChange}
-                            className="mt-1 p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
-                        />
-                        {/* //<p className="text-xs text-gray-500 mt-1">{formatMonthDisplay(filterMonth)}</p> */}
+                        {filterWeek && (
+                            <button
+                                onClick={() => handleWeekChange({ target: { value: '' } })}
+                                className="mt-1 px-2 py-1 text-sm text-gray-600 hover:text-gray-800"
+                                title="Xóa bộ lọc"
+                            >
+                                <X size={16} />
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -393,14 +393,14 @@ const AdminSchedulePage = () => {
                                             <div className="flex justify-end gap-2">
                                                 <button
                                                     onClick={() => openViewModal(schedule)}
-                                                    className="text-teal-600 hover:text-teal-800 p-1 rounded hover:bg-teal-50 transition"
+                                                    className="text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-50 transition"
                                                     title="Xem chi tiết"
                                                 >
                                                     <Eye size={18} />
                                                 </button>
                                                 <button
                                                     onClick={() => openEditModal(schedule)}
-                                                    className="text-blue-500 hover:text-blue-600 p-1 rounded hover:bg-blue-50 transition"
+                                                    className="text-blue-600 hover:text-blue-700 p-1 rounded hover:bg-blue-50 transition"
                                                     title="Chỉnh sửa"
                                                 >
                                                     <Edit size={18} />
@@ -645,7 +645,7 @@ const AdminSchedulePage = () => {
                         <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-xl">
                             <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center gap-2">
-                                    <Eye className="h-5 w-5 text-teal-600" />
+                                    <Eye className="h-5 w-5 text-blue-600" />
                                     <h3 className="text-lg font-semibold text-gray-800">
                                         Lịch làm việc của {selectedSchedule.doctorId.name} (Tuần {selectedSchedule.weekNumber}/{selectedSchedule.year})
                                     </h3>

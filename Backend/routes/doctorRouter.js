@@ -46,7 +46,7 @@ router.get('/my-reviews', doctorAuth, getAllReviews);
 router.put('/appointment/:id', doctorAuth, updateAppointment);
 router.delete('/appointment/:id', doctorAuth, deleteAppointment);
 router.get('/id', doctorAuth, getId);
-router.put('/profile/:id', doctorAuth, updateProfile);
+router.put('/update-profile/:id', doctorAuth, updateProfile);
 router.put('/upload-image/:id', doctorAuth, upload.single('image'), uploadImage);
 router.get('/my-schedule', doctorAuth, getMySchedule);
 router.post('/change-password', doctorAuth, changePassword);

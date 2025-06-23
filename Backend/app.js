@@ -25,20 +25,57 @@ connectDB();
 
 // CORS configuration
 const corsOptions = {
-    origin: ['http://localhost:5173', 'http://localhost:5174'],
+    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
-// General CORS middleware
+// Apply CORS globally
 app.use(cors(corsOptions));
 
-// Serve static files with CORS
-app.use('/images/uploads/doctors', cors(corsOptions), express.static(path.join(__dirname, 'public', 'uploads', 'doctors')));
-app.use('/images/uploads/specialties', cors(corsOptions), express.static(path.join(__dirname, 'public', 'uploads', 'specialties')));
-app.use('/images/uploads/news', cors(corsOptions), express.static(path.join(__dirname, 'public', 'uploads', 'news')));
-app.use('/images/uploads/misc', cors(corsOptions), express.static(path.join(__dirname, 'public', 'uploads', 'misc')));
+// Serve static files with explicit CORS headers and logging
+app.use(
+    '/images/uploads/doctors',
+    cors(corsOptions),
+    (req, res, next) => {
+        console.log(`[Static] Serving image: ${req.originalUrl} from ${path.join(__dirname, 'public', 'Uploads', 'doctors')}`);
+        res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5174');
+        res.setHeader('Access-Control-Allow-Methods', 'GET');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        next();
+    },
+    express.static(path.join(__dirname, 'public', 'images', 'uploads', 'doctors'), {
+        fallthrough: false, // Return 404 if file not found
+    })
+);
+app.use(
+    '/images/uploads/specialties',
+    cors(corsOptions),
+    (req, res, next) => {
+        console.log(`[Static] Serving image: ${req.originalUrl}`);
+        next();
+    },
+    express.static(path.join(__dirname, 'public', 'images', 'uploads', 'specialties'))
+);
+app.use(
+    '/images/uploads/news',
+    cors(corsOptions),
+    (req, res, next) => {
+        console.log(`[Static] Serving image: ${req.originalUrl}`);
+        next();
+    },
+    express.static(path.join(__dirname, 'public', 'images', 'uploads', 'news'))
+);
+app.use(
+    '/images/uploads/misc',
+    cors(corsOptions),
+    (req, res, next) => {
+        console.log(`[Static] Serving image: ${req.originalUrl}`);
+        next();
+    },
+    express.static(path.join(__dirname, 'public', 'images', 'uploads', 'misc'))
+);
 
 // Other middleware
 app.use(helmet());
@@ -48,7 +85,7 @@ app.use(cookieParser());
 app.use(expressSession({
     resave: false,
     saveUninitialized: false,
-    secret: process.env.EXPRESS_SESSION_SECRET || 'default_secret_key',
+    secret: process.env.JWT_KEY,
 }));
 app.use(flash());
 app.use(express.static(path.join(__dirname, 'public')));

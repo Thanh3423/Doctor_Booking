@@ -5,7 +5,6 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { CameraIcon } from "@heroicons/react/24/outline";
 
-// Google Fonts for Vietnamese
 const fontStyle = `
   @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
   .font-vietnamese {
@@ -14,68 +13,64 @@ const fontStyle = `
 `;
 
 const MyProfile = () => {
-  const [profileImage, setProfileImage] = useState("/default-profile.png");
+  const [profileImage, setProfileImage] = useState(null); // No default image
   const [isImageLoading, setIsImageLoading] = useState(false);
   const { userData, setUserData, token, backEndUrl, loadUserProfileData } = useContext(AppContext);
   const navigate = useNavigate();
 
   axios.defaults.withCredentials = true;
 
-  // Redirect to login if no token
   if (!token) {
     console.log('[MyProfile] No token, redirecting to login');
     navigate("/");
     return null;
   }
 
-  // Get image URL with proxy support
   const getImageUrl = (image) => {
     if (!image || !image.trim()) {
-      console.log('[MyProfile getImageUrl] No image provided, using default');
-      return "/default-profile.png";
+      console.log('[MyProfile getImageUrl] No image provided, returning null');
+      return null; // No default image
     }
-    // Check if image is already a full URL
     if (image.startsWith('http://') || image.startsWith('https://')) {
       console.log('[MyProfile getImageUrl] Image is full URL:', image);
-      return image;
+      return `${image}?t=${Date.now()}`; // Cache-busting
     }
-    const backendUrl = backEndUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-    const cleanPath = image
-      .replace(/^\/?(?:public\/)?(?:[Uu]ploads\/)?(?:misc\/)?/, '')
-      .replace(/^\/+/, '');
-    const url = `${backendUrl}/images/uploads/misc/${cleanPath}`;
+    const backendUrl = backEndUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+    const cleanPath = image.replace(/^\/?(?:public\/)?(?:[Uu]ploads\/)?(?:misc\/)?/, '').replace(/^\/+/, '');
+    const url = `${backendUrl}/images/uploads/misc/${cleanPath}?t=${Date.now()}`;
     console.log('[MyProfile getImageUrl] Constructed URL:', url, 'from image:', image);
     return url;
   };
 
-  // Memoize profile image URL with cache-busting
   const memoizedProfileImage = useMemo(() => {
-    if (userData?.image) {
-      const url = getImageUrl(userData.image);
-      return `${url}?t=${new Date().getTime()}`;
-    }
-    console.log('[MyProfile memoizedProfileImage] No userData.image, using default');
-    return "/default-profile.png";
+    const url = getImageUrl(userData?.image);
+    console.log('[MyProfile memoizedProfileImage] Generated image URL:', url);
+    return url;
   }, [userData?.image]);
 
-  // Set initial profile image and force reload userData
   useEffect(() => {
-    console.log('[MyProfile useEffect] Forcing profile data reload');
+    console.log('[MyProfile useEffect] Starting profile data polling');
     loadUserProfileData(true);
-    console.log('[MyProfile useEffect] Setting profile image:', memoizedProfileImage);
     setProfileImage(memoizedProfileImage);
 
-    // Debug timeout for loading state
+    const intervalId = setInterval(() => {
+      console.log('[MyProfile] Polling for profile updates');
+      loadUserProfileData();
+    }, 30000); // Poll every 30 seconds
+
     const timeout = setTimeout(() => {
       if (!userData || Object.keys(userData).length === 0) {
         console.error('[MyProfile] Stuck in loading state after 5 seconds', { userData });
         toast.error('Không thể tải hồ sơ, vui lòng thử lại');
       }
     }, 5000);
-    return () => clearTimeout(timeout);
+
+    return () => {
+      clearInterval(intervalId);
+      clearTimeout(timeout);
+    };
   }, [loadUserProfileData, memoizedProfileImage]);
 
-  // Handle input change
   const handleChange = (e) => {
     setUserData({
       ...userData,
@@ -83,7 +78,6 @@ const MyProfile = () => {
     });
   };
 
-  // Pre-load image to reduce flicker
   const preloadImage = (url) => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -99,7 +93,6 @@ const MyProfile = () => {
     });
   };
 
-  // Handle image change
   const handleImageChange = async (e) => {
     const file = e.target.files[0];
     if (!file) {
@@ -124,10 +117,9 @@ const MyProfile = () => {
       const formData = new FormData();
       formData.append("image", file);
 
-      const backendUrl = backEndUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-      console.log('[MyProfile handleImageChange] Uploading image to:', `${backendUrl}/patient/my-profile`);
-      console.log('[MyProfile handleImageChange] Token:', token);
-      const response = await axios.post(`${backendUrl}/patient/my-profile`, formData, {
+      const backendUrl = backEndUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+      console.log('[MyProfile handleImageChange] Uploading image to:', `${backendUrl}/patient/my-profile/image`);
+      const response = await axios.post(`${backendUrl}/patient/my-profile/image`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "multipart/form-data",
@@ -153,19 +145,29 @@ const MyProfile = () => {
         response: error.response?.data,
         status: error.response?.status,
       });
-      toast.error(error.response?.data?.message || "Lỗi khi cập nhật ảnh đại diện");
+      let errorMessage = error.response?.data?.message || "Lỗi khi cập nhật ảnh đại diện";
+      if (error.response?.status === 401) {
+        toast.error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.");
+        navigate("/");
+      } else {
+        toast.error(errorMessage);
+      }
     } finally {
       setIsImageLoading(false);
     }
   };
 
-  // Handle form submit
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const backendUrl = backEndUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+      const backendUrl = backEndUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
       console.log('[MyProfile handleSubmit] Submitting profile update:', userData);
-      const response = await axios.post(`${backendUrl}/patient/my-profile`, userData, {
+      const response = await axios.post(`${backendUrl}/patient/my-profile`, {
+        name: userData.name,
+        email: userData.email,
+        phoneNumber: userData.phoneNumber,
+        address: userData.address,
+      }, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -188,7 +190,13 @@ const MyProfile = () => {
         response: error.response?.data,
         status: error.response?.status,
       });
-      toast.error(error.response?.data?.message || "Lỗi khi cập nhật hồ sơ");
+      let errorMessage = error.response?.data?.message || "Lỗi khi cập nhật hồ sơ";
+      if (error.response?.status === 401) {
+        toast.error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.");
+        navigate("/");
+      } else {
+        toast.error(errorMessage);
+      }
     }
   };
 
@@ -210,24 +218,27 @@ const MyProfile = () => {
           Hồ Sơ Của Tôi
         </h2>
 
-        {/* Profile Image Upload */}
         <div className="flex flex-col items-center mb-8 relative">
           <div className="relative">
             {isImageLoading ? (
               <div className="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center">
                 <span className="text-gray-500">Đang tải...</span>
               </div>
-            ) : (
+            ) : profileImage ? (
               <img
                 src={profileImage}
                 alt="Ảnh đại diện"
                 className="w-32 h-32 rounded-full object-cover border-4 border-blue-500 shadow-md"
                 onError={(e) => {
                   console.error('[MyProfile img onError] Image load failed:', e.target.src);
-                  e.target.src = "/default-profile.png";
+                  setProfileImage(null); // Fallback to no image
                   e.target.onerror = null;
                 }}
               />
+            ) : (
+              <div className="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
+                Chưa có ảnh
+              </div>
             )}
             <label
               htmlFor="profile-image"
@@ -246,7 +257,6 @@ const MyProfile = () => {
           </div>
         </div>
 
-        {/* Profile Form */}
         <form className="space-y-6" onSubmit={handleSubmit}>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Họ và Tên</label>
@@ -257,6 +267,7 @@ const MyProfile = () => {
               onChange={handleChange}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
               placeholder="Nhập họ và tên"
+              required
             />
           </div>
 
@@ -267,8 +278,8 @@ const MyProfile = () => {
               name="email"
               value={userData?.email ?? ""}
               onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed outline-none"
-              readOnly
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+              placeholder="Nhập email"
             />
           </div>
 
@@ -293,6 +304,7 @@ const MyProfile = () => {
               onChange={handleChange}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
               placeholder="Nhập địa chỉ"
+              required
             />
           </div>
 

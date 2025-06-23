@@ -1,42 +1,34 @@
 const jwt = require('jsonwebtoken');
+const adminModel = require('../models/admin.model');
 
-const adminAuth = (req, res, next) => {
+module.exports = async (req, res, next) => {
     try {
-        const token = req.header('Authorization')?.replace('Bearer ', '');
+        const token = req.headers.authorization?.split(' ')[1];
         if (!token) {
-            console.log('No token provided in Authorization header');
-            return res.status(401).json({ message: 'Không có token, vui lòng đăng nhập' });
-        }
-
-        if (!process.env.JWT_KEY) {
-            console.error('JWT_KEY not configured in environment variables');
-            return res.status(500).json({ message: 'Lỗi cấu hình server: Khóa JWT không được thiết lập' });
+            console.warn('[adminMiddleware] No token provided', { path: req.path });
+            return res.status(401).json({ success: false, message: 'Không tìm thấy token' });
         }
 
         const decoded = jwt.verify(token, process.env.JWT_KEY);
-        console.log('Token decoded:', { id: decoded.id, role: decoded.role });
-
-        if (decoded.role !== 'admin') {
-            console.log(`Invalid role: ${decoded.role}`);
-            return res.status(403).json({ message: 'Không có quyền truy cập, yêu cầu vai trò admin' });
+        if (!decoded.id || decoded.role !== 'admin') {
+            console.warn('[adminMiddleware] Invalid token or role', { token, role: decoded.role });
+            return res.status(403).json({ success: false, message: 'Không có quyền truy cập' });
         }
 
-        req.admin = decoded;
+        const admin = await adminModel.findById(decoded.id);
+        if (!admin) {
+            console.warn('[adminMiddleware] Admin not found', { id: decoded.id });
+            return res.status(401).json({ success: false, message: 'Không tìm thấy quản trị viên' });
+        }
+
+        req.admin = { id: decoded.id };
+        console.log('[adminMiddleware] Token verified, admin ID:', decoded.id);
         next();
     } catch (error) {
-        console.error('Error in adminAuth middleware:', {
+        console.error('[adminMiddleware] Error:', {
             message: error.message,
-            stack: error.stack,
-            name: error.name,
+            path: req.path,
         });
-        if (error.name === 'JsonWebTokenError') {
-            return res.status(401).json({ message: 'Token không hợp lệ' });
-        }
-        if (error.name === 'TokenExpiredError') {
-            return res.status(401).json({ message: 'Token đã hết hạn' });
-        }
-        res.status(500).json({ message: 'Lỗi server khi xác thực', error: error.message });
+        return res.status(401).json({ success: false, message: 'Token không hợp lệ' });
     }
 };
-
-module.exports = adminAuth;

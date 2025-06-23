@@ -213,18 +213,26 @@ const logout = (req, res) => {
 const updateProfile = async (req, res) => {
   try {
     const { error } = updateProfileSchema.validate(req.body);
-    if (error) return res.status(400).json({ success: false, message: error.details[0].message });
+    if (error) {
+      console.log('[updateProfile] Validation error:', error.details[0].message);
+      return res.status(400).json({ success: false, message: error.details[0].message });
+    }
 
     const { name, email, phoneNumber, password, address } = req.body;
-    const image = req.file;
     const userId = req.user.id;
 
     const user = await patientModel.findById(userId);
-    if (!user) return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
+    if (!user) {
+      console.warn('[updateProfile] User not found:', userId);
+      return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
+    }
 
     if (email && email !== user.email) {
       const existingUser = await patientModel.findOne({ email });
-      if (existingUser) return res.status(400).json({ success: false, message: 'Email đã được sử dụng' });
+      if (existingUser) {
+        console.log('[updateProfile] Email already used:', email);
+        return res.status(400).json({ success: false, message: 'Email đã được sử dụng' });
+      }
       user.email = email;
     }
 
@@ -232,11 +240,10 @@ const updateProfile = async (req, res) => {
     if (name) user.name = name;
     if (phoneNumber) user.phoneNumber = phoneNumber;
     if (address) user.address = address;
-    if (image) user.image = `/uploads/misc/${image.filename}`;
 
     await user.save();
 
-    const imageUrl = user.image ? `${req.protocol}://${req.get('host')}${user.image}` : null;
+    const imageUrl = user.image ? `${req.protocol}://${req.get('host')}/images${user.image}?t=${Date.now()}` : null;
 
     return res.status(200).json({
       success: true,
@@ -251,8 +258,63 @@ const updateProfile = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('[updateProfile] Error:', error);
+    console.error('[updateProfile] Error:', {
+      message: error.message,
+      stack: error.stack,
+    });
     return res.status(500).json({ success: false, message: 'Lỗi cập nhật hồ sơ', error: error.message });
+  }
+};
+
+// Update profile image
+const updateProfileImage = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const image = req.file;
+
+    if (!image) {
+      console.warn('[updateProfileImage] No image provided');
+      return res.status(400).json({ success: false, message: 'Vui lòng chọn một file ảnh' });
+    }
+
+    const user = await patientModel.findById(userId);
+    if (!user) {
+      console.warn('[updateProfileImage] User not found:', userId);
+      return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
+    }
+
+    // Delete old image if exists
+    if (user.image) {
+      const oldImagePath = path.join(__dirname, '..', 'public', user.image);
+      if (fs.existsSync(oldImagePath)) {
+        fs.unlinkSync(oldImagePath);
+        console.log('[updateProfileImage] Deleted old image:', oldImagePath);
+      }
+    }
+
+    user.image = `/images/uploads/misc/${image.filename}`;
+    await user.save();
+
+    const imageUrl = user.image ? `${req.protocol}://${req.get('host')}${user.image}?t=${Date.now()}` : null;
+
+    return res.status(200).json({
+      success: true,
+      message: 'Cập nhật ảnh đại diện thành công',
+      data: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        address: user.address,
+        image: imageUrl,
+      },
+    });
+  } catch (error) {
+    console.error('[updateProfileImage] Error:', {
+      message: error.message,
+      stack: error.stack,
+    });
+    return res.status(500).json({ success: false, message: 'Lỗi cập nhật ảnh đại diện', error: error.message });
   }
 };
 
@@ -266,7 +328,7 @@ const getProfile = async (req, res) => {
       console.warn('[getProfile] User not found:', userId);
       return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
     }
-    const imageUrl = user.image ? `${req.protocol}://${req.get('host')}/images${user.image}` : null;
+    const imageUrl = user.image ? `${req.protocol}://${req.get('host')}/images${user.image}?t=${Date.now()}` : null;
     console.log('[getProfile] Profile fetched successfully:', user);
     return res.status(200).json({
       success: true,
@@ -912,6 +974,7 @@ module.exports = {
   loginUser,
   logout,
   updateProfile,
+  updateProfileImage,
   getProfile,
   getAppointments,
   bookAppointment,

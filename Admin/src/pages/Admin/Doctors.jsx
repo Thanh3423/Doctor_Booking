@@ -221,6 +221,7 @@ const DoctorsPage = () => {
     }
 
     try {
+      console.log('[DoctorsPage] Sending add-doctor request with token:', aToken);
       const submitData = new FormData();
       Object.keys(formData).forEach((key) => {
         if (formData[key]) submitData.append(key, formData[key]);
@@ -239,10 +240,16 @@ const DoctorsPage = () => {
       resetForm();
     } catch (error) {
       console.error('[DoctorsPage] Error adding doctor:', error.response?.data || error);
-      if (error.response?.status === 400 || error.response?.status === 401 || error.response?.status === 403) {
+      const errorMessage = error.response?.data?.message || 'Không thể thêm bác sĩ.';
+      if (
+        error.response?.status === 401 ||
+        (error.response?.status === 400 &&
+          ['Token không hợp lệ', 'Token has expired', 'No token provided'].includes(errorMessage))
+      ) {
+        toast.error('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
         logout();
       } else {
-        toast.error(error.response?.data?.message || 'Không thể thêm bác sĩ.');
+        toast.error(errorMessage);
       }
     } finally {
       setIsLoading(false);
@@ -275,6 +282,7 @@ const DoctorsPage = () => {
     }
 
     try {
+      console.log('[DoctorsPage] Sending update-doctor request with token:', aToken, 'for doctor ID:', selectedDoctor._id);
       const submitData = new FormData();
       Object.keys(formData).forEach((key) => {
         if (formData[key] && key !== 'password') submitData.append(key, formData[key]);
@@ -296,10 +304,16 @@ const DoctorsPage = () => {
       resetForm();
     } catch (error) {
       console.error('[DoctorsPage] Error updating doctor:', error.response?.data || error);
-      if (error.response?.status === 400 || error.response?.status === 401 || error.response?.status === 403) {
+      const errorMessage = error.response?.data?.message || 'Không thể cập nhật bác sĩ.';
+      if (
+        error.response?.status === 401 ||
+        (error.response?.status === 400 &&
+          ['Token không hợp lệ', 'Token has expired', 'No token provided'].includes(errorMessage))
+      ) {
+        toast.error('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
         logout();
       } else {
-        toast.error(error.response?.data?.message || 'Không thể cập nhật bác sĩ.');
+        toast.error(errorMessage);
       }
     } finally {
       setIsLoading(false);

@@ -4,7 +4,7 @@ const newsSchema = new mongoose.Schema(
     {
         title: { type: String, required: true, trim: true },
         content: { type: String, required: true, trim: true },
-        image: { type: String, default: '' },
+        image: { type: String, default: null },
         category: { type: String, enum: ['Health Tips', 'Clinic Updates', 'Promotions', 'Events', 'Other'], default: 'Other' },
         status: { type: String, enum: ['draft', 'published'], default: 'draft' },
         publishAt: {

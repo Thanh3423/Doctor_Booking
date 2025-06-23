@@ -7,8 +7,6 @@ import { useNavigate } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
-const DEFAULT_IMAGE = "https://via.placeholder.com/600x300?text=News";
-
 const ManageNews = () => {
     const [news, setNews] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -26,12 +24,21 @@ const ManageNews = () => {
         category: "Health Tips",
         status: "draft",
         publishAt: null,
-        existingImage: "",
+        existingImage: null,
     });
     const [imagePreview, setImagePreview] = useState("");
     const { aToken, backendUrl } = useContext(AdminContext);
     const fileInputRef = useRef(null);
     const navigate = useNavigate();
+
+    // Category mapping: English values (for backend) to Vietnamese labels (for display)
+    const categoryMap = {
+        "Health Tips": "Mẹo sức khỏe",
+        "Clinic Updates": "Cập nhật phòng khám",
+        Promotions: "Khuyến mãi",
+        Events: "Sự kiện",
+        Other: "Khác",
+    };
 
     // Fetch news
     useEffect(() => {
@@ -62,9 +69,10 @@ const ManageNews = () => {
         if (aToken) fetchNews();
     }, [aToken, backendUrl, navigate]);
 
-    // Handle image load error
+    // Handle image load error (no default image, just log)
     const handleImageError = (e) => {
-        e.target.src = DEFAULT_IMAGE;
+        console.error("Lỗi tải hình ảnh:", e.target.src);
+        e.target.style.display = "none"; // Hide the image element on error
     };
 
     // Handle search
@@ -76,7 +84,7 @@ const ManageNews = () => {
         (item) =>
             item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
             item.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.category.toLowerCase().includes(searchTerm.toLowerCase())
+            categoryMap[item.category].toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     // Handle form input change
@@ -102,7 +110,7 @@ const ManageNews = () => {
                 toast.error("Hình ảnh không được vượt quá 5MB.");
                 return;
             }
-            setFormData({ ...formData, image: file, existingImage: "" });
+            setFormData({ ...formData, image: file, existingImage: null });
             const reader = new FileReader();
             reader.onloadend = () => {
                 setImagePreview(reader.result);
@@ -123,7 +131,7 @@ const ManageNews = () => {
             category: "Health Tips",
             status: "draft",
             publishAt: null,
-            existingImage: "",
+            existingImage: null,
         });
         setImagePreview("");
         if (fileInputRef.current) fileInputRef.current.value = "";
@@ -137,12 +145,14 @@ const ManageNews = () => {
 
     // Open edit modal
     const openEditModal = (newsItem) => {
-        const imagePath = newsItem.image && newsItem.image !== "https://via.placeholder.com/150" ? `${backendUrl}${newsItem.image}` : DEFAULT_IMAGE;
+        const imagePath = newsItem.image && newsItem.image.startsWith("/images/uploads/news/")
+            ? `${backendUrl}${newsItem.image}`
+            : "";
         setFormData({
             title: newsItem.title || "",
             content: newsItem.content || "",
             image: null,
-            existingImage: newsItem.image || "",
+            existingImage: newsItem.image || null,
             category: newsItem.category || "Health Tips",
             status: newsItem.status || "draft",
             publishAt: newsItem.publishAt ? new Date(newsItem.publishAt) : null,
@@ -154,7 +164,9 @@ const ManageNews = () => {
 
     // View news
     const viewNews = (newsItem) => {
-        const imagePath = newsItem.image && newsItem.image !== "https://via.placeholder.com/150" ? `${backendUrl}${newsItem.image}` : DEFAULT_IMAGE;
+        const imagePath = newsItem.image && newsItem.image.startsWith("/images/uploads/news/")
+            ? `${backendUrl}${newsItem.image}`
+            : "";
         setSelectedNews({ ...newsItem, image: imagePath });
         setShowViewModal(true);
     };
@@ -351,7 +363,7 @@ const ManageNews = () => {
                                 filteredNews.map((n) => (
                                     <tr key={n._id} className="hover:bg-gray-50 transition">
                                         <td className="px-4 py-2 text-sm text-gray-800">{n.title}</td>
-                                        <td className="px-4 py-2 text-sm text-gray-600">{n.category}</td>
+                                        <td className="px-4 py-2 text-sm text-gray-600">{categoryMap[n.category]}</td>
                                         <td className="px-4 py-2 text-sm text-gray-600">
                                             {n.status === "published" ? "Đã xuất bản" : "Bản nháp"}
                                         </td>
@@ -437,11 +449,11 @@ const ManageNews = () => {
                                             onChange={handleChange}
                                             className="mt-1 w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
                                         >
-                                            <option value="Health Tips">Mẹo sức khỏe</option>
-                                            <option value="Clinic Updates">Cập nhật phòng khám</option>
-                                            <option value="Promotions">Khuyến mãi</option>
-                                            <option value="Events">Sự kiện</option>
-                                            <option value="Other">Khác</option>
+                                            {Object.entries(categoryMap).map(([value, label]) => (
+                                                <option key={value} value={value}>
+                                                    {label}
+                                                </option>
+                                            ))}
                                         </select>
                                     </div>
                                 </div>
@@ -485,12 +497,14 @@ const ManageNews = () => {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700">Hình ảnh</label>
                                     <div className="mt-1 relative w-48 h-32 rounded-lg overflow-hidden border-2 border-gray-200 shadow-sm">
-                                        <img
-                                            src={imagePreview || DEFAULT_IMAGE}
-                                            alt="News Preview"
-                                            className="w-full h-full object-cover"
-                                            onError={handleImageError}
-                                        />
+                                        {imagePreview && (
+                                            <img
+                                                src={imagePreview}
+                                                alt="News Preview"
+                                                className="w-full h-full object-cover"
+                                                onError={handleImageError}
+                                            />
+                                        )}
                                         <button
                                             type="button"
                                             onClick={triggerFileInput}
@@ -573,11 +587,11 @@ const ManageNews = () => {
                                             onChange={handleChange}
                                             className="mt-1 w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
                                         >
-                                            <option value="Health Tips">Mẹo sức khỏe</option>
-                                            <option value="Clinic Updates">Cập nhật phòng khám</option>
-                                            <option value="Promotions">Khuyến mãi</option>
-                                            <option value="Events">Sự kiện</option>
-                                            <option value="Other">Khác</option>
+                                            {Object.entries(categoryMap).map(([value, label]) => (
+                                                <option key={value} value={value}>
+                                                    {label}
+                                                </option>
+                                            ))}
                                         </select>
                                     </div>
                                 </div>
@@ -621,12 +635,14 @@ const ManageNews = () => {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700">Hình ảnh</label>
                                     <div className="mt-1 relative w-48 h-32 rounded-lg overflow-hidden border-2 border-gray-200 shadow-sm">
-                                        <img
-                                            src={imagePreview || DEFAULT_IMAGE}
-                                            alt="News Preview"
-                                            className="w-full h-full object-cover"
-                                            onError={handleImageError}
-                                        />
+                                        {imagePreview && (
+                                            <img
+                                                src={imagePreview}
+                                                alt="News Preview"
+                                                className="w-full h-full object-cover"
+                                                onError={handleImageError}
+                                            />
+                                        )}
                                         <button
                                             type="button"
                                             onClick={triggerFileInput}
@@ -719,14 +735,16 @@ const ManageNews = () => {
                                 </button>
                             </div>
                             <div className="space-y-4">
-                                <div className="rounded-lg overflow-hidden shadow-sm">
-                                    <img
-                                        src={selectedNews.image || DEFAULT_IMAGE}
-                                        alt={selectedNews.title}
-                                        className="w-full h-48 object-cover"
-                                        onError={handleImageError}
-                                    />
-                                </div>
+                                {selectedNews.image && (
+                                    <div className="rounded-lg overflow-hidden shadow-sm">
+                                        <img
+                                            src={selectedNews.image}
+                                            alt={selectedNews.title}
+                                            className="w-full h-48 object-cover"
+                                            onError={handleImageError}
+                                        />
+                                    </div>
+                                )}
                                 <div className="p-4 bg-gray-50 rounded-lg shadow-sm">
                                     <h4 className="text-sm font-semibold text-gray-700 mb-2">Nội dung</h4>
                                     <p className="text-sm text-gray-600 whitespace-pre-wrap">{selectedNews.content}</p>
@@ -737,7 +755,7 @@ const ManageNews = () => {
                                         <div className="flex items-center gap-2">
                                             <Calendar size={16} className="text-gray-500" />
                                             <span className="text-sm text-gray-600">
-                                                <span className="font-medium">Danh mục:</span> {selectedNews.category}
+                                                <span className="font-medium">Danh mục:</span> {categoryMap[selectedNews.category]}
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-2">
@@ -788,15 +806,7 @@ const ManageNews = () => {
                                 </div>
                             </div>
                             <div className="flex justify-end gap-2 mt-6">
-                                <button
-                                    onClick={() => {
-                                        setShowViewModal(false);
-                                        openEditModal(selectedNews);
-                                    }}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm shadow-sm"
-                                >
-                                    Chỉnh sửa
-                                </button>
+
                                 <button
                                     onClick={() => {
                                         setShowViewModal(false);

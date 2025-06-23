@@ -1,12 +1,11 @@
-
 import React, { useContext, useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { AdminContext } from '../../context/AdminContext';
-import { Camera, Search, X, Eye, Trash2, Edit, Plus, Tag } from 'lucide-react';
+import { Camera, Search, X, Eye, Trash2, Edit, Plus, Bookmark } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-const DEFAULT_IMAGE = 'https://via.placeholder.com/600x300?text=Specialty';
+const DEFAULT_IMAGE = 'https://via.placeholder.com/600x300?text=Specialty+Image';
 
 const ManageSpecialties = () => {
     const [specialties, setSpecialties] = useState([]);
@@ -28,6 +27,13 @@ const ManageSpecialties = () => {
     const { aToken, backendUrl } = useContext(AdminContext);
     const fileInputRef = useRef(null);
     const navigate = useNavigate();
+
+    // Utility function to get valid image URL
+    const getImageUrl = (imagePath) => {
+        if (!imagePath) return DEFAULT_IMAGE;
+        if (imagePath.startsWith('http')) return imagePath;
+        return `${backendUrl}${imagePath}`;
+    };
 
     // Fetch specialties
     const fetchSpecialties = async () => {
@@ -61,7 +67,8 @@ const ManageSpecialties = () => {
 
     // Handle image load error
     const handleImageError = (e) => {
-        e.target.src = DEFAULT_IMAGE;
+        console.error('Lỗi tải hình ảnh:', e.target.src);
+        e.target.src = DEFAULT_IMAGE; // Fallback to placeholder
     };
 
     // Handle search
@@ -125,10 +132,7 @@ const ManageSpecialties = () => {
 
     // Open edit modal
     const openEditModal = (specialty) => {
-        const imagePath =
-            specialty.image && specialty.image !== 'https://via.placeholder.com/150'
-                ? `${backendUrl}${specialty.image}`
-                : DEFAULT_IMAGE;
+        const imagePath = getImageUrl(specialty.image);
         setFormData({
             name: specialty.name || '',
             description: specialty.description || '',
@@ -142,10 +146,7 @@ const ManageSpecialties = () => {
 
     // View specialty
     const viewSpecialty = (specialty) => {
-        const imagePath =
-            specialty.image && specialty.image !== 'https://via.placeholder.com/150'
-                ? `${backendUrl}${specialty.image}`
-                : DEFAULT_IMAGE;
+        const imagePath = getImageUrl(specialty.image);
         setSelectedSpecialty({ ...specialty, image: imagePath });
         setShowViewModal(true);
     };
@@ -183,7 +184,7 @@ const ManageSpecialties = () => {
             toast.success(`${formData.name} đã được thêm thành công.`);
             setShowAddModal(false);
             resetForm();
-            fetchSpecialties(); // Refresh specialties
+            fetchSpecialties();
         } catch (error) {
             console.error('Lỗi khi thêm chuyên khoa:', error);
             toast.error(error.response?.data?.message || 'Không thể thêm chuyên khoa.');
@@ -229,7 +230,7 @@ const ManageSpecialties = () => {
             toast.success(`${formData.name} đã được cập nhật thành công.`);
             setShowEditModal(false);
             resetForm();
-            fetchSpecialties(); // Refresh specialties
+            fetchSpecialties();
         } catch (error) {
             console.error('Lỗi khi cập nhật chuyên khoa:', error);
             toast.error(error.response?.data?.message || 'Không thể cập nhật chuyên khoa.');
@@ -256,7 +257,7 @@ const ManageSpecialties = () => {
             toast.success(`${specialtyToDelete.name} đã được xóa thành công.`);
             setShowDeleteModal(false);
             setSpecialtyToDelete(null);
-            fetchSpecialties(); // Refresh specialties
+            fetchSpecialties();
         } catch (error) {
             console.error('Lỗi khi xóa chuyên khoa:', error);
             toast.error(error.response?.data?.message || 'Không thể xóa chuyên khoa.');
@@ -278,7 +279,7 @@ const ManageSpecialties = () => {
             <div className="max-w-7xl mx-auto">
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-2xl font-semibold text-gray-800 flex items-center gap-2">
-                        <Tag size={24} /> Quản lý chuyên khoa
+                        <Bookmark size={24} /> Quản lý chuyên khoa
                     </h1>
                     <button
                         onClick={openAddModal}
@@ -297,27 +298,26 @@ const ManageSpecialties = () => {
                         value={searchTerm}
                         onChange={handleSearchChange}
                     />
-                    {searchTerm && (
-                        <button
-                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                            onClick={() => setSearchTerm('')}
-                        >
-                            <X size={18} />
-                        </button>
-                    )}
+                    <button
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        aria-label="Xóa tìm kiếm"
+                        onClick={() => setSearchTerm('')}
+                    >
+                        {searchTerm && <X size={18} />}
+                    </button>
                 </div>
 
                 <div className="bg-white rounded-lg shadow-md overflow-hidden">
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-100">
                             <tr>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider w-4/12">
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-4/12">
                                     Tên
                                 </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider w-5/12">
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-5/12">
                                     Mô tả
                                 </th>
-                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-600 uppercase tracking-wider w-3/12">
+                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider w-3/12">
                                     Hành động
                                 </th>
                             </tr>
@@ -578,12 +578,14 @@ const ManageSpecialties = () => {
                             </p>
                             <div className="flex justify-end gap-2">
                                 <button
+                                    type="button"
                                     onClick={() => setShowDeleteModal(false)}
                                     className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm shadow-sm"
                                 >
                                     Hủy bỏ
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={handleDelete}
                                     className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm shadow-sm disabled:bg-red-400"
                                     disabled={isLoading}
@@ -601,7 +603,7 @@ const ManageSpecialties = () => {
                         <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                                    <Eye size={20} /> Xem chuyên khoa
+                                    <Eye size={20} /> Xem chi tiết chuyên khoa
                                 </h3>
                                 <button
                                     onClick={() => {
@@ -616,9 +618,7 @@ const ManageSpecialties = () => {
                             </div>
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700">
-                                        Tên chuyên khoa
-                                    </label>
+                                    <label className="block text-sm font-medium text-gray-700">Tên chuyên khoa</label>
                                     <p className="mt-1 w-full p-2 border border-gray-200 rounded-lg text-sm bg-gray-50">
                                         {selectedSpecialty.name}
                                     </p>
@@ -642,6 +642,7 @@ const ManageSpecialties = () => {
                                 </div>
                                 <div className="flex justify-end gap-2 pt-4">
                                     <button
+                                        type="button"
                                         onClick={() => {
                                             setShowViewModal(false);
                                             openEditModal(selectedSpecialty);
@@ -651,6 +652,7 @@ const ManageSpecialties = () => {
                                         Chỉnh sửa
                                     </button>
                                     <button
+                                        type="button"
                                         onClick={() => {
                                             setShowViewModal(false);
                                             setSelectedSpecialty(null);

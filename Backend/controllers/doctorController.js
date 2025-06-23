@@ -529,12 +529,13 @@ const uploadImage = async (req, res) => {
     doctor.image = imagePath;
     await doctor.save();
     console.log('[uploadImage] Image uploaded successfully:', imagePath);
-    return res.status(200).json({ success: true, imageUrl: imagePath }); // Return filename only
+    return res.status(200).json({ success: true, imageUrl: imagePath });
   } catch (error) {
     console.error('[uploadImage] Error:', error);
     return res.status(500).json({ success: false, message: 'Lỗi tải ảnh lên', error: error.message });
   }
 };
+
 
 const changePassword = async (req, res) => {
   try {

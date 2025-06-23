@@ -39,14 +39,14 @@ app.use(
     '/images/uploads/doctors',
     cors(corsOptions),
     (req, res, next) => {
-        console.log(`[Static] Serving image: ${req.originalUrl} from ${path.join(__dirname, 'public', 'Uploads', 'doctors')}`);
+        console.log(`[Static] Serving image: ${req.originalUrl} from ${path.join(__dirname, 'public', 'images', 'uploads', 'doctors')}`);
         res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5174');
         res.setHeader('Access-Control-Allow-Methods', 'GET');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
         next();
     },
     express.static(path.join(__dirname, 'public', 'images', 'uploads', 'doctors'), {
-        fallthrough: false, // Return 404 if file not found
+        fallthrough: false,
     })
 );
 app.use(

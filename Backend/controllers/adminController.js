@@ -10,6 +10,8 @@ const patientModel = require('../models/patient.model');
 const reviewModel = require('../models/review.model');
 const scheduleModel = require('../models/schedule.model');
 const moment = require('moment-timezone');
+const fs = require('fs');
+const path = require('path');
 
 const loginAdmin = async (req, res) => {
     try {
@@ -128,13 +130,11 @@ const createSchedule = async (req, res) => {
         const weekNumber = moment.tz(startDate, 'Asia/Ho_Chi_Minh').week();
         const year = moment.tz(startDate, 'Asia/Ho_Chi_Minh').year();
 
-        // Check for existing schedule
         const existingSchedule = await scheduleModel.findOne({ doctorId, weekStartDate: startDate });
         if (existingSchedule) {
             return res.status(400).json({ message: 'Schedule already exists for this doctor and week' });
         }
 
-        // Validate availability
         const validDays = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
         const daysMap = {
             'Monday': 'Thứ 2',
@@ -219,7 +219,6 @@ const updateSchedule = async (req, res) => {
         const weekNumber = moment.tz(startDate, 'Asia/Ho_Chi_Minh').week();
         const year = moment.tz(startDate, 'Asia/Ho_Chi_Minh').year();
 
-        // Validate availability
         const validDays = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
         const daysMap = {
             'Monday': 'Thứ 2',
@@ -252,7 +251,6 @@ const updateSchedule = async (req, res) => {
             return res.status(400).json({ message: 'Invalid availability format or day-date mismatch' });
         }
 
-        // Check for conflicts with existing appointments
         const conflictingAppointments = await appointmentModel.find({
             doctorId: schedule.doctorId._id,
             appointmentDate: { $gte: startDate, $lte: moment.tz(startDate, 'Asia/Ho_Chi_Minh').endOf('week').toDate() },
@@ -268,7 +266,6 @@ const updateSchedule = async (req, res) => {
             return res.status(400).json({ message: 'Cannot update schedule due to conflicting appointments' });
         }
 
-        // Update schedule
         schedule.weekStartDate = startDate;
         schedule.weekNumber = weekNumber;
         schedule.year = year;
@@ -308,7 +305,6 @@ const deleteSchedule = async (req, res) => {
             return res.status(404).json({ message: 'Schedule not found' });
         }
 
-        // Check for booked time slots
         const hasBookedSlots = schedule.availability.some(slot =>
             slot.timeSlots.some(ts => ts.isBooked)
         );
@@ -316,7 +312,6 @@ const deleteSchedule = async (req, res) => {
             return res.status(400).json({ message: 'Cannot delete schedule with booked time slots' });
         }
 
-        // Check for appointments in the schedule's week
         const conflictingAppointments = await appointmentModel.find({
             doctorId: schedule.doctorId._id,
             appointmentDate: {
@@ -336,7 +331,6 @@ const deleteSchedule = async (req, res) => {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
-
 
 const getAllAppointments = async (req, res) => {
     try {
@@ -544,7 +538,7 @@ const editDoctor = async (req, res) => {
         } else if (existingImage) {
             updateData.image = existingImage;
         } else {
-            updateData.image = doctor.image;
+            updateData.image = doctor.image || '';
         }
 
         const updatedDoctor = await doctorModel.findByIdAndUpdate(id, updateData, {
@@ -623,7 +617,7 @@ const getDoctorById = async (req, res) => {
                 experience: doctor.experience,
                 about: doctor.about,
                 fees: doctor.fees,
-                image: doctor.image,
+                image: doctor.image || '',
                 createdAt: doctor.createdAt,
             },
         });
@@ -759,7 +753,7 @@ const deletePatient = async (req, res) => {
 const editPatient = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, email, password, phoneNumber, address, existingImage } = req.body;
+        const { name, email, password, phoneNumber, address } = req.body;
         if (!name || !email || !address) {
             return res.status(400).json({ message: 'Tên, email và địa chỉ là bắt buộc' });
         }
@@ -797,19 +791,22 @@ const editPatient = async (req, res) => {
             updateData.password = await bcrypt.hash(password, 10);
         }
 
-        // Xử lý ảnh
         if (req.file) {
-            updateData.image = `/images/uploads/misc/${req.file.filename}`;
-        } else if (existingImage) {
-            updateData.image = existingImage;
-        } else {
-            updateData.image = patient.image || ''; // Giữ ảnh cũ nếu không có ảnh mới hoặc existingImage
+            if (patient.image) {
+                const oldImagePath = path.join(__dirname, '..', 'public', patient.image);
+                if (fs.existsSync(oldImagePath)) {
+                    fs.unlinkSync(oldImagePath);
+                }
+            }
+            updateData.image = `/uploads/misc/${req.file.filename}`;
         }
 
         const updatedPatient = await patientModel.findByIdAndUpdate(id, updateData, {
             new: true,
             runValidators: true,
         }).populate('medicalHistory.doctor', 'name');
+
+        const imageUrl = updatedPatient.image ? `${req.protocol}://${req.get('host')}/images${updatedPatient.image}?t=${Date.now()}` : null;
 
         res.status(200).json({
             message: 'Cập nhật bệnh nhân thành công',
@@ -819,7 +816,7 @@ const editPatient = async (req, res) => {
                 email: updatedPatient.email,
                 phoneNumber: updatedPatient.phoneNumber,
                 address: updatedPatient.address,
-                image: updatedPatient.image || '', // Đảm bảo image luôn là chuỗi
+                image: imageUrl,
                 reviews: updatedPatient.reviews || [],
                 medicalHistory: updatedPatient.medicalHistory || [],
                 appointment: updatedPatient.appointment || [],
@@ -827,7 +824,7 @@ const editPatient = async (req, res) => {
             },
         });
     } catch (error) {
-        console.error('Lỗi khi cập nhật bệnh nhân:', error);
+        console.error('[editPatient] Error:', error);
         res.status(500).json({ message: 'Lỗi server khi cập nhật bệnh nhân', error: error.message });
     }
 };
@@ -842,7 +839,7 @@ const addSpecialty = async (req, res) => {
         const specialtyData = {
             name,
             description: description || '',
-            image: req.file ? `/images/uploads/specialties/${req.file.filename}` : 'https://via.placeholder.com/150',
+            image: req.file ? `/images/uploads/specialties/${req.file.filename}` : '',
         };
 
         const specialty = new specialtyModel(specialtyData);
@@ -861,38 +858,41 @@ const updateSpecialty = async (req, res) => {
     try {
         const { id } = req.params;
         const { name, description, existingImage } = req.body;
-        if (!name) {
-            return res.status(400).json({ message: 'Tên chuyên khoa là bắt buộc' });
+        const newImage = req.file;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ message: 'ID chuyên khoa không hợp lệ' });
         }
 
-        const specialtyData = {
-            name,
-            description: description || '',
-        };
-
-        if (req.file) {
-            specialtyData.image = `/images/uploads/specialties/${req.file.filename}`;
-        } else if (existingImage) {
-            specialtyData.image = existingImage;
-        } else {
-            specialtyData.image = 'https://via.placeholder.com/150';
-        }
-
-        const specialty = await specialtyModel.findByIdAndUpdate(id, specialtyData, {
-            new: true,
-            runValidators: true,
-        });
+        const specialty = await specialtyModel.findById(id);
         if (!specialty) {
-            return res.status(404).json({ message: 'Không tìm thấy chuyên khoa' });
+            return res.status(404).json({ message: 'Chuyên khoa không tồn tại' });
         }
+
+        let imagePath = existingImage || specialty.image;
+        if (newImage) {
+            if (specialty.image) {
+                const oldImagePath = path.join(__dirname, '..', 'public', specialty.image);
+                if (fs.existsSync(oldImagePath)) {
+                    fs.unlinkSync(oldImagePath);
+                }
+            }
+            imagePath = `/images/uploads/specialties/${newImage.filename}`;
+        }
+
+        specialty.name = name || specialty.name;
+        specialty.description = description || specialty.description;
+        specialty.image = imagePath;
+
+        await specialty.save();
 
         res.status(200).json({ message: 'Cập nhật chuyên khoa thành công', specialty });
     } catch (error) {
-        console.error('Lỗi khi cập nhật chuyên khoa:', error);
+        console.error('Error updating specialty:', error);
         if (error.code === 11000) {
             return res.status(400).json({ message: 'Tên chuyên khoa đã tồn tại' });
         }
-        res.status(500).json({ message: 'Lỗi server khi cập nhật chuyên khoa', error: error.message });
+        res.status(500).json({ message: 'Lỗi khi cập nhật chuyên khoa', error: error.message });
     }
 };
 
@@ -944,7 +944,7 @@ const addNews = async (req, res) => {
             category: category || 'Other',
             status: status || 'draft',
             publishAt: publishAt ? new Date(publishAt) : null,
-            image: req.file ? `/images/uploads/news/${req.file.filename}` : ' ',
+            image: req.file ? `/images/uploads/news/${req.file.filename}` : '',
         };
 
         const news = new newsModel(newsData);
@@ -968,6 +968,11 @@ const updateNews = async (req, res) => {
             return res.status(400).json({ message: 'ID tin tức không hợp lệ' });
         }
 
+        const news = await newsModel.findById(id);
+        if (!news) {
+            return res.status(404).json({ message: 'Không tìm thấy tin tức' });
+        }
+
         const newsData = {
             title,
             content,
@@ -981,19 +986,15 @@ const updateNews = async (req, res) => {
         } else if (existingImage) {
             newsData.image = existingImage;
         } else {
-            newsData.image = ' ';
+            newsData.image = news.image || '';
         }
 
-        const news = await newsModel.findByIdAndUpdate(id, newsData, {
+        const updatedNews = await newsModel.findByIdAndUpdate(id, newsData, {
             new: true,
             runValidators: true,
         });
 
-        if (!news) {
-            return res.status(404).json({ message: 'Không tìm thấy tin tức' });
-        }
-
-        res.status(200).json({ message: 'Cập nhật tin tức thành công', news });
+        res.status(200).json({ message: 'Cập nhật tin tức thành công', news: updatedNews });
     } catch (error) {
         console.error('Lỗi khi cập nhật tin tức:', error);
         res.status(500).json({ message: 'Lỗi server khi cập nhật tin tức', error: error.message });

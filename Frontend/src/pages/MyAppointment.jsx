@@ -23,6 +23,19 @@ const MyAppointments = () => {
   const { token, setToken, setUserData, backEndUrl } = useContext(AppContext);
   const navigate = useNavigate();
 
+  // Helper function to construct image URL
+  const getImageUrl = (imagePath) => {
+    if (!imagePath || !imagePath.trim()) {
+      console.log('[getImageUrl] No image path provided, returning null');
+      return null;
+    }
+    // Remove any leading path segments to get just the filename
+    const cleanPath = imagePath.replace(/^\/?(?:images\/)?(?:uploads\/)?(?:doctors\/)?/, '');
+    const url = `${backEndUrl}/images/uploads/doctors/${cleanPath}?t=${Date.now()}`;
+    console.log('[getImageUrl] Constructed URL:', url, 'from path:', imagePath);
+    return url;
+  };
+
   // Fetch Appointments
   const fetchAppointments = async () => {
     try {
@@ -34,7 +47,7 @@ const MyAppointments = () => {
         return;
       }
 
-      const backendUrl = backEndUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+      const backendUrl = backEndUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
       const endpoint = `${backendUrl}/patient/my-appointment`;
       console.log('[fetchAppointments] Fetching appointments from:', endpoint);
 
@@ -45,10 +58,8 @@ const MyAppointments = () => {
 
       console.log('[fetchAppointments] Raw API response:', response.data);
 
-      // Handle different response formats
       let appointmentsData = [];
       if (Array.isArray(response.data)) {
-        // Backward compatibility for array response
         console.warn('[fetchAppointments] Received array directly, expected object with data');
         appointmentsData = response.data;
       } else if (response.data.success && Array.isArray(response.data.data)) {
@@ -182,7 +193,6 @@ const MyAppointments = () => {
 
         {/* Search and Filter */}
         <div className="mb-6 flex flex-col md:flex-row gap-4">
-          {/* Search Bar */}
           <div className="relative flex-1">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
@@ -193,8 +203,6 @@ const MyAppointments = () => {
               className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
             />
           </div>
-
-          {/* Filter Dropdown */}
           <div className="bg-white rounded-lg shadow-sm p-2 w-full md:w-48">
             <select
               id="filter"
@@ -234,16 +242,21 @@ const MyAppointments = () => {
                 className="bg-white rounded-lg shadow-md p-4 flex items-center gap-4 hover:shadow-lg transition-all"
               >
                 {/* Doctor Image */}
-                <img
-                  src={
-                    appt.doctorId?.image
-                      ? `${backEndUrl}/images/uploads/doctors/${appt.doctorId.image}`
-                      : ''
-                  }
-                  alt={appt.doctorId?.name || 'Bác sĩ'}
-                  className="w-12 h-12 rounded-full object-cover border border-gray-200"
-                  onError={(e) => (e.target.onerror = null)}
-                />
+                {appt.doctorId?.image ? (
+                  <img
+                    src={getImageUrl(appt.doctorId.image)}
+                    alt={appt.doctorId?.name || 'Bác sĩ'}
+                    className="w-12 h-12 rounded-full object-cover border border-gray-200"
+                    onError={(e) => {
+                      console.warn('[MyAppointments] Image load failed:', e.target.src);
+                      e.target.src = '/path/to/placeholder-image.jpg'; // Replace with actual placeholder path
+                    }}
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 border border-gray-200">
+                    BS
+                  </div>
+                )}
 
                 {/* Appointment Details */}
                 <div className="flex-1">
@@ -265,10 +278,10 @@ const MyAppointments = () => {
                 <div className="flex flex-col gap-2">
                   <span
                     className={`text-xs font-medium px-2 py-1 rounded-full w-28 text-center ${appt.status === 'cancelled'
-                      ? 'bg-red-100 text-red-700'
-                      : appt.status === 'pending'
-                        ? 'bg-yellow-100 text-yellow-700'
-                        : 'bg-green-100 text-green-700'
+                        ? 'bg-red-100 text-red-700'
+                        : appt.status === 'pending'
+                          ? 'bg-yellow-100 text-yellow-700'
+                          : 'bg-green-100 text-green-700'
                       }`}
                   >
                     {appt.status === 'cancelled' ? 'Đã hủy' : appt.status === 'pending' ? 'Chờ xác nhận' : 'Hoàn thành'}

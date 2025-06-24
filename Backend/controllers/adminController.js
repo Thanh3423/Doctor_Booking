@@ -728,17 +728,16 @@ const deletePatient = async (req, res) => {
             return res.status(404).json({ message: 'Không tìm thấy bệnh nhân' });
         }
 
-        const appointmentCount = await appointmentModel.countDocuments({ patientId: id });
-        if (appointmentCount > 0) {
-            return res.status(400).json({
-                message: `Không thể xóa bệnh nhân "${patient.name}" vì đang có ${appointmentCount} lịch hẹn liên quan`,
-            });
-        }
+        const currentDate = moment.tz('Asia/Ho_Chi_Minh').startOf('day').toDate();
+        const upcomingAppointmentCount = await appointmentModel.countDocuments({
+            patientId: id,
+            appointmentDate: { $gte: currentDate },
+            status: { $nin: ['completed', 'cancelled'] },
+        });
 
-        const reviewCount = await reviewModel.countDocuments({ patientId: id });
-        if (reviewCount > 0) {
+        if (upcomingAppointmentCount > 0) {
             return res.status(400).json({
-                message: `Không thể xóa bệnh nhân "${patient.name}" vì có ${reviewCount} đánh giá liên quan`,
+                message: `Không thể xóa bệnh nhân "${patient.name}" vì đang có ${upcomingAppointmentCount} lịch hẹn sắp diễn ra`,
             });
         }
 

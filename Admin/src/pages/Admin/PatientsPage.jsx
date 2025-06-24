@@ -690,58 +690,6 @@ const PatientsPage = () => {
                                     </p>
                                 </div>
                             </div>
-                            <div>
-                                <p className="text-sm font-medium text-gray-700">Lịch sử khám bệnh</p>
-                                <div className="text-sm text-gray-500">
-                                    {Array.isArray(selectedPatient.medicalHistory) && selectedPatient.medicalHistory.length > 0 ? (
-                                        selectedPatient.medicalHistory.map((record, index) => (
-                                            <div key={index} className="mb-2">
-                                                <p><span className="font-medium">Chẩn đoán:</span> {record.diagnosis || "N/A"}</p>
-                                                <p><span className="font-medium">Điều trị:</span> {record.treatment || "N/A"}</p>
-                                                <p><span className="font-medium">Bác sĩ:</span> {record.doctor?.name || "N/A"}</p>
-                                                <p><span className="font-medium">Ngày:</span> {record.date ? new Date(record.date).toLocaleDateString("vi-VN") : "N/A"}</p>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <p>Không có lịch sử khám bệnh</p>
-                                    )}
-                                </div>
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium text-gray-700">Đánh giá</p>
-                                <div className="text-sm text-gray-500">
-                                    {Array.isArray(selectedPatient.reviews) && selectedPatient.reviews.length > 0 ? (
-                                        selectedPatient.reviews.map((review, index) => (
-                                            <div key={review._id || index} className="mb-2">
-                                                <p><span className="font-medium">Điểm:</span> {review.rating || "N/A"}</p>
-                                                <p><span className="font-medium">Nhận xét:</span> {review.review || "N/A"}</p>
-                                                <p><span className="font-medium">Bác sĩ:</span> {review.doctorId?.name || "N/A"}</p>
-                                                <p><span className="font-medium">Ngày:</span> {review.createdAt ? new Date(review.createdAt).toLocaleDateString("vi-VN") : "N/A"}</p>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <p>Không có đánh giá</p>
-                                    )}
-                                </div>
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium text-gray-700">Lịch hẹn</p>
-                                <div className="text-sm text-gray-500">
-                                    {Array.isArray(selectedPatient.appointment) && selectedPatient.appointment.length > 0 ? (
-                                        selectedPatient.appointment.map((appt, index) => (
-                                            <div key={appt._id || index} className="mb-2">
-                                                <p><span className="font-medium">Ngày hẹn:</span> {appt.appointmentDate ? new Date(appt.appointmentDate).toLocaleDateString("vi-VN") : "N/A"}</p>
-                                                <p><span className="font-medium">Khung giờ:</span> {appt.timeslot || "N/A"}</p>
-                                                <p><span className="font-medium">Trạng thái:</span> {appt.status || "N/A"}</p>
-                                                <p><span className="font-medium">Bác sĩ:</span> {appt.doctorId?.name || "N/A"}</p>
-                                                <p><span className="font-medium">Ngày tạo:</span> {appt.createdAt ? new Date(appt.createdAt).toLocaleDateString("vi-VN") : "N/A"}</p>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <p>Không có lịch hẹn</p>
-                                    )}
-                                </div>
-                            </div>
                         </div>
                         <div className="flex justify-end mt-6">
                             <button

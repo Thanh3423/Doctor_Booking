@@ -57,7 +57,24 @@ const AdminDashboard = () => {
     setPatientNames(patientMap);
   }, [allDoctors, allAppointments, allPatients, loading]);
 
-  const latestAppointments = allAppointments.slice(-4).reverse();
+  // Sort appointments by date and timeslot (newest first)
+  const sortedAppointments = [...allAppointments].sort((a, b) => {
+    const dateA = a.appointmentDate ? new Date(a.appointmentDate) : new Date(0);
+    const dateB = b.appointmentDate ? new Date(b.appointmentDate) : new Date(0);
+
+    // Compare dates first
+    if (dateB.getTime() !== dateA.getTime()) {
+      return dateB.getTime() - dateA.getTime(); // Newer dates first
+    }
+
+    // If dates are equal, compare timeslots
+    const timeA = a.timeslot || '';
+    const timeB = b.timeslot || '';
+    return timeB.localeCompare(timeA); // Newer timeslots first (e.g., "15:00" > "10:00")
+  });
+
+  // Get the 4 most recent appointments
+  const latestAppointments = sortedAppointments.slice(0, 4);
 
   const getStatusText = status => {
     switch (status) {

@@ -35,13 +35,20 @@ const DoctorsPage = () => {
 
   // Helper function to get full image URL
   const getImageUrl = (imagePath) => {
-    if (!imagePath) return DEFAULT_IMAGE;
-    if (imagePath.startsWith('data:') || imagePath.startsWith('http')) {
-      // Append cache-busting timestamp for external or base64 images
-      return imagePath.includes('?') ? `${imagePath}&t=${Date.now()}` : `${imagePath}?t=${Date.now()}`;
+    if (!imagePath || imagePath === 'null') {
+      console.log('[DoctorsPage getImageUrl] No valid image provided, returning default');
+      return DEFAULT_IMAGE;
     }
-    const url = `${backendUrl}${imagePath.startsWith('/') ? '' : '/'}${imagePath}?t=${Date.now()}`;
-    console.log('[DoctorsPage] Generated image URL:', url);
+    if (imagePath.startsWith('data:') || imagePath.startsWith('http')) {
+      console.log('[DoctorsPage getImageUrl] Image is base64 or full URL:', imagePath);
+      return `${imagePath}?t=${Date.now()}`; // Cache-busting for external/base64 images
+    }
+    // Clean the path to ensure no duplicate slashes or incorrect prefixes
+    const cleanPath = imagePath
+      .replace(/^\/?(?:public\/)?(?:[Ii]mages\/)?(?:[Uu]ploads\/)?(?:doctors\/)?/, '')
+      .replace(/^\/+/, '');
+    const url = `${backendUrl}/images/uploads/doctors/${cleanPath}?t=${Date.now()}`;
+    console.log('[DoctorsPage getImageUrl] Constructed URL:', url, 'from imagePath:', imagePath);
     return url;
   };
 
@@ -58,6 +65,28 @@ const DoctorsPage = () => {
   }, [aToken, backendUrl, logout, isTokenExpired]);
 
   // Fetch doctors and specialties
+  const fetchDoctors = async () => {
+    try {
+      if (!aToken || !backendUrl) {
+        throw new Error('Thiếu token hoặc backendUrl');
+      }
+      const doctorsResponse = await axios.get(`${backendUrl}/admin/doctor`, {
+        headers: { Authorization: `Bearer ${aToken}` },
+      });
+      console.log('[DoctorsPage] Doctors Response:', doctorsResponse.data);
+      if (doctorsResponse.data?.success && Array.isArray(doctorsResponse.data.data)) {
+        setDoctors(doctorsResponse.data.data);
+      } else {
+        console.warn('[DoctorsPage] Unexpected doctors response format:', doctorsResponse.data);
+        setDoctors([]);
+        toast.error('Dữ liệu bác sĩ không đúng định dạng.');
+      }
+    } catch (error) {
+      console.error('[DoctorsPage] Lỗi khi lấy danh sách bác sĩ:', error.response?.data || error.message);
+      handleError(error);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -89,12 +118,7 @@ const DoctorsPage = () => {
         setSpecialties(specialtiesData);
       } catch (error) {
         console.error('[DoctorsPage] Lỗi khi lấy dữ liệu:', error.response?.data || error.message);
-        if (error.response?.status === 400 || error.response?.status === 401 || error.response?.status === 403) {
-          toast.error('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
-          logout();
-        } else {
-          toast.error(error.response?.data?.message || 'Không thể tải danh sách bác sĩ hoặc chuyên khoa.');
-        }
+        handleError(error);
         setDoctors([]);
         setSpecialties([]);
       } finally {
@@ -109,6 +133,20 @@ const DoctorsPage = () => {
       toast.error('Cấu hình không hợp lệ. Vui lòng kiểm tra đăng nhập.');
     }
   }, [aToken, backendUrl, logout]);
+
+  // Handle errors consistently
+  const handleError = (error) => {
+    if (
+      error.response?.status === 400 ||
+      error.response?.status === 401 ||
+      error.response?.status === 403
+    ) {
+      toast.error('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
+      logout();
+    } else {
+      toast.error(error.response?.data?.message || 'Không thể tải dữ liệu.');
+    }
+  };
 
   // Handle form input change
   const handleChange = (e) => {
@@ -250,17 +288,7 @@ const DoctorsPage = () => {
       resetForm();
     } catch (error) {
       console.error('[DoctorsPage] Error adding doctor:', error.response?.data || error);
-      const errorMessage = error.response?.data?.message || 'Không thể thêm bác sĩ.';
-      if (
-        error.response?.status === 401 ||
-        (error.response?.status === 400 &&
-          ['Token không hợp lệ', 'Token has expired', 'No token provided'].includes(errorMessage))
-      ) {
-        toast.error('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
-        logout();
-      } else {
-        toast.error(errorMessage);
-      }
+      handleError(error);
     } finally {
       setIsLoading(false);
     }
@@ -312,25 +340,15 @@ const DoctorsPage = () => {
       setShowEditModal(false);
       setSelectedDoctor(null);
       resetForm();
+      // Refresh doctor list to ensure updated image is fetched
+      await fetchDoctors();
     } catch (error) {
       console.error('[DoctorsPage] Error updating doctor:', error.response?.data || error);
-      const errorMessage = error.response?.data?.message || 'Không thể cập nhật bác sĩ.';
-      if (
-        error.response?.status === 401 ||
-        (error.response?.status === 400 &&
-          ['Token không hợp lệ', 'Token has expired', 'No token provided'].includes(errorMessage))
-      ) {
-        toast.error('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
-        logout();
-      } else {
-        toast.error(errorMessage);
-      }
+      handleError(error);
     } finally {
       setIsLoading(false);
     }
   };
-
-
 
   // Confirm delete
   const confirmDelete = (doctor) => {
@@ -362,17 +380,7 @@ const DoctorsPage = () => {
         data: error.response?.data,
         message: error.message,
       });
-      const errorMessage = error.response?.data?.message || 'Không thể xóa bác sĩ.';
-      if (
-        error.response?.status === 401 ||
-        (error.response?.status === 400 &&
-          ['Token không hợp lệ', 'Token has expired', 'No token provided'].includes(errorMessage))
-      ) {
-        toast.error('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
-        logout();
-      } else {
-        toast.error(errorMessage);
-      }
+      handleError(error);
     } finally {
       setIsLoading(false);
     }

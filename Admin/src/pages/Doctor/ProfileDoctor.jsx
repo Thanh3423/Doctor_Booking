@@ -67,8 +67,9 @@ const DoctorProfile = () => {
       console.log('[DoctorProfile getImageUrl] Image is full URL:', image);
       return image;
     }
-    const cleanPath = image.replace(/^\/?(?:public\/)?(?:[Ii]mages\/)?(?:[Uu]ploads\/)?(?:doctors\/)?/, '').replace(/^\/+/, '');
-    const url = `${backendUrl}/images/uploads/doctors/${cleanPath}`;
+    // Ensure the path starts with a single slash and append to backendUrl
+    const cleanPath = image.replace(/^\/+/, '/');
+    const url = `${backendUrl}${cleanPath}`;
     console.log('[DoctorProfile getImageUrl] Constructed URL:', url, 'from image:', image);
     return url;
   };

@@ -105,8 +105,12 @@ const loginDoctor = async (req, res) => {
 
 const getAllDoctors = async (req, res) => {
   try {
-    const doctors = await doctorModel.find().populate('specialty');
-    res.status(200).json({ success: true, data: doctors });
+    const doctors = await doctorModel.find().populate('specialty', 'name');
+    const formattedDoctors = doctors.map((doctor) => ({
+      ...doctor.toObject(),
+      image: doctor.image ? doctor.image : null, // Ensure full relative path or null
+    }));
+    res.status(200).json({ success: true, data: formattedDoctors });
   } catch (error) {
     console.error("Lỗi khi lấy danh sách bác sĩ:", error);
     res.status(500).json({ success: false, message: "Lỗi máy chủ.", error: error.message });
@@ -166,7 +170,7 @@ const getDoctorData = async (req, res) => {
     }
     const doctorData = {
       ...doctor.toObject(),
-      image: doctor.image || null, // Return filename or null
+      image: doctor.image ? doctor.image : null, // Ensure full relative path or null
       specialty: doctor.specialty?._id.toString() || '',
       specialtyName: doctor.specialty?.name || 'Không xác định',
     };
@@ -525,7 +529,7 @@ const uploadImage = async (req, res) => {
     if (!doctor) {
       return res.status(404).json({ success: false, message: 'Bác sĩ không tồn tại' });
     }
-    const imagePath = req.file.filename; // Store only the filename
+    const imagePath = `/images/uploads/doctors/${req.file.filename}`; // Store relative path
     doctor.image = imagePath;
     await doctor.save();
     console.log('[uploadImage] Image uploaded successfully:', imagePath);

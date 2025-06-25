@@ -26,6 +26,34 @@ function Appointment() {
   const [availableSlots, setAvailableSlots] = useState([]);
   const [error, setError] = useState(null);
 
+  // Redirect immediately if no token
+  useEffect(() => {
+    if (!token) {
+      console.log('[Appointment] No token found, redirecting to login');
+      toast.error('Vui lòng đăng nhập để đặt lịch hẹn');
+      navigate('/login');
+    }
+  }, [token, navigate]);
+
+  // Skip rendering if no token (redundant but ensures no form is shown)
+  if (!token) {
+    return (
+      <section className="bg-gray-50 py-8 px-4 font-vietnamese min-h-screen">
+        <style>{fontStyle}</style>
+        <div className="text-center">
+          <p className="text-red-500 text-lg">Vui lòng đăng nhập để đặt lịch hẹn</p>
+          <button
+            onClick={() => navigate('/login')}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Đăng nhập
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  // Fetch doctor data
   useEffect(() => {
     console.log('[Appointment] Raw docId from useParams:', docId);
     const fetchDoctor = async () => {
@@ -74,9 +102,10 @@ function Appointment() {
     console.log('[Appointment] Current doctor state:', doctor);
   }, [doctor]);
 
+  // Fetch available slots
   useEffect(() => {
     const fetchAvailableSlots = async () => {
-      if (!appointmentData.appointmentDate || !token) {
+      if (!appointmentData.appointmentDate) {
         setAvailableSlots([]);
         return;
       }
@@ -121,14 +150,10 @@ function Appointment() {
         }
       }
     };
-    if (doctor && token && appointmentData.appointmentDate) {
+    if (doctor && appointmentData.appointmentDate) {
       fetchAvailableSlots();
-    } else if (!token) {
-      setError('Vui lòng đăng nhập để xem khung giờ trống');
-      toast.error('Vui lòng đăng nhập để xem khung giờ trống');
-      navigate('/login');
     }
-  }, [appointmentData.appointmentDate, docId, token, backEndUrl, doctor, navigate]);
+  }, [appointmentData.appointmentDate, docId, backEndUrl, doctor, navigate]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -141,11 +166,6 @@ function Appointment() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!token) {
-      toast.error('Vui lòng đăng nhập để đặt lịch hẹn');
-      navigate('/login');
-      return;
-    }
     if (!appointmentData.appointmentDate || !appointmentData.timeslot) {
       toast.error('Vui lòng chọn ngày và khung giờ');
       return;
@@ -164,7 +184,7 @@ function Appointment() {
         doctorId: docId,
         appointmentDate: formattedDate,
         timeslot: appointmentData.timeslot,
-        notes: appointmentData.notes.trim() || undefined, // Send undefined if notes is empty
+        notes: appointmentData.notes.trim() || undefined,
       };
       console.log('[Appointment] Sending booking request:', payload);
       const response = await axios.post(
@@ -177,7 +197,6 @@ function Appointment() {
       );
       console.log('[Appointment] Booking response:', response.data);
       if (response.data.success) {
-        // Changed to check response.data.success instead of message
         toast.success('Đặt lịch hẹn thành công!');
         navigate('/my-appointments');
       } else {
@@ -257,7 +276,7 @@ function Appointment() {
         <div className="flex flex-col md:flex-row gap-6">
           <div className="md:w-1/2 bg-white p-6 rounded-xl shadow-lg">
             <img
-              src={`${backEndUrl}${doctor?.image || '/fallback-doctor-image.jpg'}`} // Adjusted image path
+              src={`${backEndUrl}${doctor?.image || '/fallback-doctor-image.jpg'}?t=${Date.now()}`}
               alt={`BS. ${doctor?.name || 'Bác sĩ'}`}
               className="w-full h-48 object-cover rounded-lg mb-4"
               onError={(e) => (e.target.src = '/fallback-doctor-image.jpg')}
@@ -332,7 +351,7 @@ function Appointment() {
                   onChange={handleInputChange}
                   className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-blue-500"
                   required
-                  disabled={!appointmentData.appointmentDate || !token || availableSlots.length === 0}
+                  disabled={!appointmentData.appointmentDate || availableSlots.length === 0}
                 >
                   <option value="">
                     {availableSlots.length === 0
@@ -372,8 +391,7 @@ function Appointment() {
                 disabled={
                   isSubmitting ||
                   !appointmentData.appointmentDate ||
-                  !appointmentData.timeslot ||
-                  !token
+                  !appointmentData.timeslot
                 }
               >
                 {isSubmitting ? 'Đang xử lý...' : 'Đặt lịch'}

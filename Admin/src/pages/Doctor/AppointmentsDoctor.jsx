@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useContext } from "react";
 import axios from "axios";
 import { AppContext } from "../../context/AppContext";
@@ -5,7 +6,7 @@ import { DoctorContext } from "../../context/DoctorContext";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
 import moment from "moment-timezone";
-import 'moment/locale/vi';
+import 'moment/locale/vi'; // Corrected import for Vietnamese locale
 
 moment.locale('vi');
 
@@ -58,7 +59,7 @@ const StatusModal = ({ isOpen, onClose, onSubmit, appointmentId, status }) => {
   const statusOptions = [
     { value: "completed", label: "Hoàn thành" },
     { value: "cancelled", label: "Đã hủy" },
-  ].filter(option => option.value !== status?.toLowerCase());
+  ].filter((option) => option.value !== status?.toLowerCase());
 
   const handleSubmit = () => {
     if (!newStatus) {
@@ -84,8 +85,11 @@ const StatusModal = ({ isOpen, onClose, onSubmit, appointmentId, status }) => {
             onChange={(e) => setNewStatus(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
             aria-label="Chọn trạng thái lịch hẹn"
+            title="Chọn trạng thái lịch hẹn"
           >
-            <option value="" disabled>Chọn trạng thái</option>
+            <option value="" disabled>
+              Chọn trạng thái
+            </option>
             {statusOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -138,6 +142,7 @@ const Appointment = () => {
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [doctorId, setDoctorId] = useState(null);
   const [patientNames, setPatientNames] = useState({});
@@ -153,17 +158,17 @@ const Appointment = () => {
 
   useEffect(() => {
     if (!dToken) {
-      console.log('Không tìm thấy dToken, chuyển hướng đến trang đăng nhập');
+      console.log("Không tìm thấy dToken, chuyển hướng đến trang đăng nhập");
       setLoading(false);
       setError("Thiếu mã xác thực. Vui lòng đăng nhập.");
       toast.error("Vui lòng đăng nhập để tiếp tục.");
-      navigate('/doctor/login');
+      navigate("/doctor/login");
       return;
     }
 
     const fetchDoctorId = async () => {
       try {
-        console.log('Đang lấy ID bác sĩ với dToken:', dToken);
+        console.log("Đang lấy ID bác sĩ với dToken:", dToken);
         const { data } = await axios.get(`${backendUrl}/doctor/id`, {
           headers: { Authorization: `Bearer ${dToken}` },
         });
@@ -175,7 +180,7 @@ const Appointment = () => {
         setError("Không thể lấy thông tin bác sĩ.");
         if (error.response?.status === 401) {
           logout();
-          navigate('/doctor/login');
+          navigate("/doctor/login");
         }
       }
     };
@@ -190,7 +195,7 @@ const Appointment = () => {
       try {
         setLoading(true);
         setError(null);
-        console.log('Đang lấy lịch hẹn với dToken:', dToken);
+        console.log("Đang lấy lịch hẹn với dToken:", dToken);
         const { data } = await axios.get(`${backendUrl}/doctor/my-appointments`, {
           headers: { Authorization: `Bearer ${dToken}` },
         });
@@ -210,7 +215,7 @@ const Appointment = () => {
         toast.error(message);
         if (error.response?.status === 401) {
           logout();
-          navigate('/doctor/login');
+          navigate("/doctor/login");
         }
       } finally {
         setLoading(false);
@@ -239,7 +244,7 @@ const Appointment = () => {
 
     const fetchRating = async () => {
       try {
-        console.log('Đang lấy đánh giá với dToken:', dToken);
+        console.log("Đang lấy đánh giá với dToken:", dToken);
         const { data } = await axios.get(`${backendUrl}/doctor/rating/${doctorId}`, {
           headers: { Authorization: `Bearer ${dToken}` },
         });
@@ -250,7 +255,7 @@ const Appointment = () => {
         toast.error("Không thể tải đánh giá.");
         if (error.response?.status === 401) {
           logout();
-          navigate('/doctor/login');
+          navigate("/doctor/login");
         }
       }
     };
@@ -280,7 +285,7 @@ const Appointment = () => {
         setReviews([]);
         if (error.response?.status === 401) {
           logout();
-          navigate('/doctor/login');
+          navigate("/doctor/login");
         }
       }
     };
@@ -290,15 +295,19 @@ const Appointment = () => {
 
   const updateAppointmentStatus = async (appointmentId, newStatus, note = "") => {
     try {
-      console.log('Đang cập nhật trạng thái lịch hẹn:', { appointmentId, newStatus, note, dToken });
+      console.log("Đang cập nhật trạng thái lịch hẹn:", { appointmentId, newStatus, note, dToken });
       const updateData = { status: newStatus };
       if (note) updateData.notes = note;
 
-      const response = await axios.put(`${backendUrl}/doctor/appointment/${appointmentId}`, updateData, {
-        headers: { Authorization: `Bearer ${dToken}` },
-      });
+      const response = await axios.put(
+        `${backendUrl}/doctor/appointment/${appointmentId}`,
+        updateData,
+        {
+          headers: { Authorization: `Bearer ${dToken}` },
+        }
+      );
 
-      console.log('Phản hồi từ backend:', response.data);
+      console.log("Phản hồi từ backend:", response.data);
 
       if (response.data.success) {
         const updatedStatus = response.data.appointment?.status || newStatus;
@@ -314,7 +323,9 @@ const Appointment = () => {
           cancelled: "Đã hủy",
           pending: "Đang chờ",
         };
-        toast.success(`Cập nhật trạng thái lịch hẹn thành công: ${statusText[updatedStatus.toLowerCase()]}`);
+        toast.success(
+          `Cập nhật trạng thái lịch hẹn thành công: ${statusText[updatedStatus.toLowerCase()]}`
+        );
       } else {
         throw new Error(response.data.message || "Cập nhật trạng thái thất bại.");
       }
@@ -323,7 +334,7 @@ const Appointment = () => {
       toast.error(error.response?.data?.message || "Cập nhật trạng thái lịch hẹn thất bại.");
       if (error.response?.status === 401) {
         logout();
-        navigate('/doctor/login');
+        navigate("/doctor/login");
       }
     }
   };
@@ -348,50 +359,48 @@ const Appointment = () => {
 
   const parseDate = (dateString) => {
     if (!dateString) {
-      console.warn('Ngày không có giá trị:', dateString);
+      console.warn("Ngày không có giá trị:", dateString);
       return null;
     }
     try {
-      // Try parsing as YYYY-MM-DD HH:mm in +07
-      let date = moment.tz(dateString, 'YYYY-MM-DD HH:mm', 'Asia/Ho_Chi_Minh');
+      // Parse dateString as YYYY-MM-DD in Asia/Ho_Chi_Minh timezone
+      let date = moment.tz(dateString.split(" ")[0], "YYYY-MM-DD", "Asia/Ho_Chi_Minh");
       if (date.isValid()) {
-        console.log(`Parsed ${dateString} as YYYY-MM-DD HH:mm in +07:`, date.format());
+        console.log(`Parsed ${dateString} as YYYY-MM-DD in +07:`, date.format());
         return date;
       }
 
-      // Try parsing as ISO string (assume UTC, convert to +07)
-      date = moment.utc(dateString).tz('Asia/Ho_Chi_Minh');
-      if (date.isValid()) {
-        console.log(`Parsed ${dateString} as ISO (UTC) to +07:`, date.format());
-        return date;
-      }
-
-      // Fallback to general parsing in +07
-      date = moment.tz(dateString, 'Asia/Ho_Chi_Minh');
+      // Fallback to general parsing in Asia/Ho_Chi_Minh
+      date = moment.tz(dateString, "Asia/Ho_Chi_Minh");
       if (date.isValid()) {
         console.log(`Parsed ${dateString} as general format in +07:`, date.format());
         return date;
       }
 
-      throw new Error('Ngày không hợp lệ');
+      throw new Error("Ngày không hợp lệ");
     } catch (error) {
-      console.warn('Lỗi phân tích ngày:', { dateString, error });
+      console.warn("Lỗi phân tích ngày:", { dateString, error });
       return null;
     }
   };
 
-  const formatDate = (dateString) => {
+  const formatDate = (dateString, timeslot) => {
     const date = parseDate(dateString);
     if (!date) return "N/A";
-    return date.format('DD/MM/YYYY HH:mm');
+    // Use timeslot directly if available, otherwise default to empty string
+    const timeDisplay = timeslot && timeslot.includes("-") ? timeslot : "N/A";
+    return `${date.format("DD/MM/YYYY")} ${timeDisplay}`;
   };
 
   const filteredAppointments = appointments.filter((appointment) => {
-    const today = moment().tz('Asia/Ho_Chi_Minh').startOf('day');
+    const today = moment().tz("Asia/Ho_Chi_Minh").startOf("day");
     const appointmentDate = parseDate(appointment.appointmentDate);
 
     if (!appointmentDate) {
-      console.warn(`Ngày không hợp lệ cho lịch hẹn ${appointment._id}:`, appointment.appointmentDate);
+      console.warn(
+        `Ngày không hợp lệ cho lịch hẹn ${appointment._id}:`,
+        appointment.appointmentDate
+      );
       return activeTab === "upcoming" && normalizeStatus(appointment.status) === "pending";
     }
 
@@ -399,16 +408,40 @@ const Appointment = () => {
 
     let tabMatch = false;
     if (activeTab === "upcoming") {
-      tabMatch = appointmentDate.isSameOrAfter(today, 'day') && status === "pending";
-      console.log(`Filter upcoming - ID: ${appointment._id}, Date: ${appointmentDate.format()}, Status: ${status}, Match: ${tabMatch}`);
+      tabMatch =
+        appointmentDate.isSameOrAfter(today, "day") && status === "pending";
+      console.log(
+        `Filter upcoming - ID: ${appointment._id}, Date: ${appointmentDate.format()}, Status: ${status}, Match: ${tabMatch}`
+      );
     } else if (activeTab === "past") {
-      tabMatch = appointmentDate.isBefore(today, 'day') || status === "completed" || status === "cancelled";
-      console.log(`Filter past - ID: ${appointment._id}, Date: ${appointmentDate.format()}, Status: ${status}, Match: ${tabMatch}`);
+      tabMatch =
+        appointmentDate.isBefore(today, "day") ||
+        status === "completed" ||
+        status === "cancelled";
+      console.log(
+        `Filter past - ID: ${appointment._id}, Date: ${appointmentDate.format()}, Status: ${status}, Match: ${tabMatch}`
+      );
     }
     if (!tabMatch) return false;
 
     if (statusFilter !== "all" && status !== normalizeStatus(statusFilter)) {
       return false;
+    }
+
+    // Date filter
+    if (dateFilter) {
+      const selectedDate = moment.tz(dateFilter, "YYYY-MM-DD", "Asia/Ho_Chi_Minh");
+      if (!selectedDate.isValid()) {
+        console.warn("Ngày lọc không hợp lệ:", dateFilter);
+        return false;
+      }
+      const matchesDate = appointmentDate.isSame(selectedDate, "day");
+      console.log(
+        `Date filter - ID: ${appointment._id}, Appointment Date: ${appointmentDate.format(
+          "YYYY-MM-DD"
+        )}, Selected Date: ${selectedDate.format("YYYY-MM-DD")}, Matches: ${matchesDate}`
+      );
+      if (!matchesDate) return false;
     }
 
     if (debouncedSearchQuery) {
@@ -417,7 +450,9 @@ const Appointment = () => {
       const matches =
         patient.name.toLowerCase().includes(searchLower) ||
         patient.email.toLowerCase().includes(searchLower);
-      console.log(`Search Query: ${searchLower}, Appointment ID: ${appointment._id}, Matches: ${matches}`);
+      console.log(
+        `Search Query: ${searchLower}, Appointment ID: ${appointment._id}, Matches: ${matches}`
+      );
       return matches;
     }
 
@@ -457,16 +492,29 @@ const Appointment = () => {
     total: appointments.length,
     upcoming: appointments.filter((app) => {
       const date = parseDate(app.appointmentDate);
-      const match = date && normalizeStatus(app.status) === "pending" && date.isSameOrAfter(moment().tz('Asia/Ho_Chi_Minh').startOf('day'), 'day');
-      console.log(`Stats upcoming - ID: ${app._id}, Date: ${date ? date.format() : 'N/A'}, Match: ${match}`);
+      const match =
+        date &&
+        normalizeStatus(app.status) === "pending" &&
+        date.isSameOrAfter(moment().tz("Asia/Ho_Chi_Minh").startOf("day"), "day");
+      console.log(
+        `Stats upcoming - ID: ${app._id}, Date: ${date ? date.format() : "N/A"}, Match: ${match}`
+      );
       return match;
     }).length,
-    completed: appointments.filter((app) => normalizeStatus(app.status) === "completed").length,
-    cancelled: appointments.filter((app) => normalizeStatus(app.status) === "cancelled").length,
+    completed: appointments.filter((app) => normalizeStatus(app.status) === "completed")
+      .length,
+    cancelled: appointments.filter((app) => normalizeStatus(app.status) === "cancelled")
+      .length,
     past: appointments.filter((app) => {
       const date = parseDate(app.appointmentDate);
-      const match = date && (date.isBefore(moment().tz('Asia/Ho_Chi_Minh').startOf('day'), 'day') || normalizeStatus(app.status) === "completed" || normalizeStatus(app.status) === "cancelled");
-      console.log(`Stats past - ID: ${app._id}, Date: ${date ? date.format() : 'N/A'}, Match: ${match}`);
+      const match =
+        date &&
+        (date.isBefore(moment().tz("Asia/Ho_Chi_Minh").startOf("day"), "day") ||
+          normalizeStatus(app.status) === "completed" ||
+          normalizeStatus(app.status) === "cancelled");
+      console.log(
+        `Stats past - ID: ${app._id}, Date: ${date ? date.format() : "N/A"}, Match: ${match}`
+      );
       return match;
     }).length,
     averageRating: rating?.averageRating || "N/A",
@@ -482,8 +530,18 @@ const Appointment = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-10">
         <div className="bg-white bg-opacity-90 backdrop-blur-lg p-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 animate-fade-in border-l-4 border-blue-500">
           <div className="flex items-center">
-            <svg className="w-6 h-6 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <svg
+              className="w-6 h-6 text-blue-600 mr-2"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
             <h3 className="text-sm font-semibold text-gray-600 uppercase">Tổng Lịch Hẹn</h3>
           </div>
@@ -491,8 +549,18 @@ const Appointment = () => {
         </div>
         <div className="bg-white bg-opacity-90 backdrop-blur-lg p-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 animate-fade-in border-l-4 border-green-500">
           <div className="flex items-center">
-            <svg className="w-6 h-6 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <svg
+              className="w-6 h-6 text-green-600 mr-2"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
             <h3 className="text-sm font-semibold text-gray-600 uppercase">Sắp Tới</h3>
           </div>
@@ -500,8 +568,18 @@ const Appointment = () => {
         </div>
         <div className="bg-white bg-opacity-90 backdrop-blur-lg p-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 animate-fade-in border-l-4 border-yellow-500">
           <div className="flex items-center">
-            <svg className="w-6 h-6 text-yellow-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+            <svg
+              className="w-6 h-6 text-yellow-600 mr-2"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M5 13l4 4L19 7"
+              />
             </svg>
             <h3 className="text-sm font-semibold text-gray-600 uppercase">Đã Hoàn Thành</h3>
           </div>
@@ -509,7 +587,11 @@ const Appointment = () => {
         </div>
         <div className="bg-white bg-opacity-90 backdrop-blur-lg p-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 animate-fade-in border-l-4 border-purple-500">
           <div className="flex items-center">
-            <svg className="w-6 h-6 text-purple-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <svg
+              className="w-6 h-6 text-purple-600 mr-2"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
               <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3 .921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784 .57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81 .588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
             </svg>
             <h3 className="text-sm font-semibold text-gray-600 uppercase">Đánh Giá Trung Bình</h3>
@@ -517,7 +599,11 @@ const Appointment = () => {
           <p className="text-3xl font-bold text-gray-900 mt-2 flex items-center">
             {stats.averageRating}
             {stats.averageRating !== "N/A" && (
-              <svg className="w-6 h-6 text-yellow-400 ml-2" fill="currentColor" viewBox="0 0 20 20">
+              <svg
+                className="w-6 h-6 text-yellow-400 ml-2"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3 .921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784 .57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81 .588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
               </svg>
             )}
@@ -535,8 +621,14 @@ const Appointment = () => {
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => { setActiveTab(tab.id); setCurrentPage(1); }}
-              className={`px-4 py-2 text-sm font-semibold transition-colors duration-200 border-b-2 ${activeTab === tab.id ? "border-blue-600 text-blue-600" : "border-transparent text-gray-600 hover:text-blue-500"}`}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setCurrentPage(1);
+              }}
+              className={`px-4 py-2 text-sm font-semibold transition-colors duration-200 border-b-2 ${activeTab === tab.id
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-600 hover:text-blue-500"
+                }`}
               aria-selected={activeTab === tab.id}
               title={tab.label}
             >
@@ -547,31 +639,101 @@ const Appointment = () => {
       </div>
 
       {/* Nội dung theo tab */}
-      {activeTab !== "reviews" ? (
+      {activeTab === "reviews" ? (
+        <div className="bg-white bg-opacity-90 backdrop-blur-lg p-6 sm:p-8 rounded-2xl shadow-lg">
+          <h3 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6">
+            Đánh Giá Từ Bệnh Nhân
+          </h3>
+          {!reviews || reviews.length === 0 ? (
+            <div className="text-center py-12 text-lg text-gray-600">
+              Chưa có đánh giá nào.
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {reviews.map((review, index) => (
+                <div
+                  key={review._id || index}
+                  className="bg-white bg-opacity-90 rounded-xl p-6 shadow-md hover:shadow-lg transition-all duration-200"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        {review.patientId?.name || "Ẩn danh"}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        {formatDate(review.createdAt, "")}
+                      </p>
+                    </div>
+                    <div className="flex items-center mt-2">
+                      {[...Array(5)].map((_, i) => (
+                        <svg
+                          key={i}
+                          className={`h-5 w-5 ${i < review.rating ? "text-yellow-400" : "text-gray-300"
+                            }`}
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24 .588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3 .921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784 .57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81 .588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      ))}
+                      <span className="ml-2 text-sm text-gray-600">{review.rating}/5</span>
+                    </div>
+                    <div className="mt-3">
+                      <p className="text-gray-600">{review.review || "Không có nhận xét"}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
         <>
           {/* Bộ lọc lịch hẹn */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
-            <div className="flex items-center gap-3">
-              <label className="text-sm font-semibold text-gray-700">Trạng thái:</label>
-              <select
-                value={statusFilter}
-                onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition bg-white"
-                aria-label="Lọc theo trạng thái"
-                title="Lọc theo trạng thái"
-              >
-                <option value="all">Tất cả</option>
-                <option value="pending">Đang chờ</option>
-                <option value="completed">Hoàn thành</option>
-                <option value="cancelled">Đã hủy</option>
-              </select>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-semibold text-gray-700">Trạng thái:</label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition bg-white"
+                  aria-label="Lọc theo trạng thái"
+                  title="Lọc theo trạng thái"
+                >
+                  <option value="all">Tất cả</option>
+                  <option value="pending">Đang chờ</option>
+                  <option value="completed">Hoàn thành</option>
+                  <option value="cancelled">Đã hủy</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-3 mt-3 sm:mt-0">
+                <label className="text-sm font-semibold text-gray-700">Ngày:</label>
+                <input
+                  type="date"
+                  value={dateFilter}
+                  onChange={(e) => {
+                    setDateFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition bg-white"
+                  aria-label="Lọc theo ngày"
+                  title="Lọc theo ngày"
+                />
+              </div>
             </div>
             <div className="relative w-full md:w-80">
               <input
                 type="text"
                 placeholder="Tìm kiếm bệnh nhân (tên hoặc email)..."
                 value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="w-full border border-gray-300 rounded-lg px-4 py-2 pl-10 focus:ring-2 focus:ring-blue-500 focus:outline-none transition bg-white"
                 aria-label="Tìm kiếm bệnh nhân"
                 title="Tìm kiếm bệnh nhân"
@@ -582,7 +744,12 @@ const Appointment = () => {
                 stroke="currentColor"
                 viewBox="0 0 24 24"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
               </svg>
             </div>
           </div>
@@ -609,9 +776,16 @@ const Appointment = () => {
           ) : filteredAppointments.length === 0 ? (
             <div className="bg-white bg-opacity-90 rounded-2xl shadow-lg p-6 text-center text-lg text-gray-600">
               Không tìm thấy lịch hẹn {activeTab === "upcoming" ? "sắp tới" : "đã qua"}.
-              {debouncedSearchQuery && (
+              {(debouncedSearchQuery || dateFilter) && (
                 <p className="mt-2 text-sm text-gray-500">
-                  Không có kết quả cho "{debouncedSearchQuery}".
+                  Không có kết quả cho{" "}
+                  {debouncedSearchQuery && `"${debouncedSearchQuery}"`}
+                  {debouncedSearchQuery && dateFilter && " và "}
+                  {dateFilter &&
+                    `ngày ${moment
+                      .tz(dateFilter, "Asia/Ho_Chi_Minh")
+                      .format("DD/MM/YYYY")}`}
+                  .
                 </p>
               )}
             </div>
@@ -643,7 +817,8 @@ const Appointment = () => {
                         return (
                           <tr
                             key={appointment._id}
-                            className={`transition-all duration-200 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gradient-to-r hover:from-blue-50 hover:to-white hover:border-l-2 hover:border-blue-200`}
+                            className={`transition-all duration-200 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                              } hover:bg-gradient-to-r hover:from-blue-50 hover:to-white hover:border-l-2 hover:border-blue-200`}
                           >
                             <td className="px-6 py-5 whitespace-nowrap text-left border-r border-gray-100">
                               <div>
@@ -656,7 +831,7 @@ const Appointment = () => {
                               </div>
                             </td>
                             <td className="px-6 py-5 whitespace-nowrap text-base text-center text-gray-700 border-r border-gray-100">
-                              {formatDate(appointment.appointmentDate)}
+                              {formatDate(appointment.appointmentDate, appointment.timeslot)}
                             </td>
                             <td className="px-6 py-5 text-base text-center text-gray-700 border-r border-gray-100">
                               {appointment.notes || "Không có ghi chú"}
@@ -664,7 +839,9 @@ const Appointment = () => {
                             <td className="px-6 py-5 whitespace-nowrap text-center">
                               <StatusBadge
                                 status={appointment.status}
-                                onClick={() => handleStatusClick(appointment._id, appointment.status)}
+                                onClick={() =>
+                                  handleStatusClick(appointment._id, appointment.status)
+                                }
                               />
                             </td>
                           </tr>
@@ -681,7 +858,10 @@ const Appointment = () => {
                   <button
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition ${currentPage === 1 ? "bg-gray-200 text-gray-500 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition ${currentPage === 1
+                        ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                        : "bg-blue-600 text-white hover:bg-blue-700"
+                      }`}
                     aria-label="Trang trước"
                     title="Trang trước"
                   >
@@ -691,7 +871,10 @@ const Appointment = () => {
                     <button
                       key={page}
                       onClick={() => handlePageChange(page)}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${currentPage === page ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${currentPage === page
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                        }`}
                       aria-label={`Trang ${page}`}
                       title={`Trang ${page}`}
                     >
@@ -704,7 +887,10 @@ const Appointment = () => {
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition ${currentPage === totalPages ? "bg-gray-200 text-gray-500 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition ${currentPage === totalPages
+                        ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                        : "bg-blue-600 text-white hover:bg-blue-700"
+                      }`}
                     aria-label="Trang sau"
                     title="Trang sau"
                   >
@@ -724,47 +910,6 @@ const Appointment = () => {
             status={selectedStatus}
           />
         </>
-      ) : (
-        <div className="bg-white bg-opacity-90 backdrop-blur-lg p-6 sm:p-8 rounded-2xl shadow-lg">
-          <h3 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6">Đánh Giá Từ Bệnh Nhân</h3>
-          {!reviews || reviews.length === 0 ? (
-            <div className="text-center py-12 text-lg text-gray-600">Chưa có đánh giá nào.</div>
-          ) : (
-            <div className="space-y-6">
-              {reviews.map((review, index) => (
-                <div
-                  key={review._id}
-                  className="bg-white bg-opacity-90 rounded-xl p-6 shadow-md hover:shadow-lg transition-all duration-200"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold text-gray-900">
-                        {review.patientId?.name || "Ẩn danh"}
-                      </h3>
-                      <p className="text-sm text-gray-500">{formatDate(review.createdAt)}</p>
-                    </div>
-                    <div className="flex items-center mt-2">
-                      {[...Array(5)].map((_, i) => (
-                        <svg
-                          key={i}
-                          className={`h-5 w-5 ${i < review.rating ? "text-yellow-400" : "text-gray-300"}`}
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3 .921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784 .57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81 .588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                      ))}
-                      <span className="ml-2 text-sm text-gray-600">{review.rating}/5</span>
-                    </div>
-                    <p className="mt-3 text-gray-700 leading-relaxed">
-                      {review.review || "Không có phản hồi"}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       )}
     </div>
   );

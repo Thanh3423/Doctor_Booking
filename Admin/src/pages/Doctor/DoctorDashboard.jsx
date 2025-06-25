@@ -1,3 +1,4 @@
+
 import React, { useContext, useEffect, useState } from "react";
 import { Calendar, CheckSquare, AlertCircle, Ban } from "lucide-react";
 import axios from "axios";
@@ -104,14 +105,17 @@ const DoctorDashboard = () => {
   // Format date and timeslot
   const formatDateTime = (date, timeslot) => {
     try {
-      if (!date || !timeslot) return "N/A";
-      const momentDate = moment.tz(date, "Asia/Ho_Chi_Minh");
+      if (!date) return "N/A";
+      const momentDate = moment.tz(date.split(' ')[0], 'YYYY-MM-DD', 'Asia/Ho_Chi_Minh');
       if (!momentDate.isValid()) throw new Error("Invalid date");
 
-      const [startTime] = timeslot.split("-"); // e.g., "09:00-10:00" -> "09:00"
-      if (!startTime.match(/^\d{2}:\d{2}$/)) throw new Error("Invalid timeslot format");
+      // Validate timeslot format (e.g., "09:00-10:00")
+      if (!timeslot || !timeslot.includes('-') || !timeslot.match(/^\d{2}:\d{2}-\d{2}:\d{2}$/)) {
+        console.warn("Invalid timeslot format:", timeslot);
+        return momentDate.format("DD/MM/YYYY") + " N/A";
+      }
 
-      return momentDate.format("DD/MM/YYYY") + " " + startTime;
+      return `${momentDate.format("DD/MM/YYYY")} ${timeslot}`;
     } catch (error) {
       console.warn("Date formatting error:", error.message, { date, timeslot });
       return "N/A";

@@ -466,7 +466,8 @@ const ManageMedicalHistory = () => {
                                             .filter((appt) => !appt.hasMedicalHistory)
                                             .map((appt) => (
                                                 <option key={appt._id} value={appt._id}>
-                                                    {appt.patientName} - {new Date(appt.appointmentDate).toLocaleDateString("vi-VN")} - {appt.timeslot}
+                                                    {appt.patientName || "Bệnh nhân không xác định"} -{" "}
+                                                    {new Date(appt.appointmentDate).toLocaleDateString("vi-VN")} - {appt.timeslot}
                                                 </option>
                                             ))}
                                     </select>

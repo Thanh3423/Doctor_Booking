@@ -54,7 +54,7 @@ const AppointmentsPage = () => {
           patientPhone: patient.phoneNumber || "N/A",
           status: appointment.status?.toLowerCase() || "pending", // Normalize status
         };
-      });
+      }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // Sort by createdAt descending
 
       setAppointments(enrichedAppointments);
       setIsLoading(false);

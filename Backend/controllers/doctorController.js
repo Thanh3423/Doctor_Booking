@@ -938,7 +938,7 @@ const getCompletedAppointments = async (req, res) => {
 
     const formattedAppointments = appointments.map((appt) => ({
       _id: appt._id,
-      patientId: appt.patientId._id,
+      patientId: appt.patientId?._id || null, // Handle null patientId
       patientName: appt.patientId?.name || "Không xác định",
       patientEmail: appt.patientId?.email || "",
       appointmentDate: appt.appointmentDate,

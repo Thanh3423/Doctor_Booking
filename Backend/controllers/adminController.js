@@ -132,8 +132,10 @@ const createSchedule = async (req, res) => {
 
         const existingSchedule = await scheduleModel.findOne({ doctorId, weekStartDate: startDate });
         if (existingSchedule) {
-            return res.status(400).json({ message: 'Schedule already exists for this doctor and week' });
+            return res.status(400).json({ message: 'Schedule alreadywash already exists for this doctor and week' });
         }
+
+
 
         const validDays = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
         const daysMap = {
@@ -344,9 +346,10 @@ const getAllAppointments = async (req, res) => {
             .populate({
                 path: 'doctorId',
                 select: 'name specialty',
-                populate: { path: 'specialty', select: 'name' },
+                populate: { path: 'specialty', select: 'name', strictPopulate: false },
                 strictPopulate: false,
-            });
+            })
+            .sort({ createdAt: -1 }); // Sort by createdAt in descending order
         res.status(200).json({
             success: true,
             data: appointments.map(a => ({
@@ -374,11 +377,16 @@ const getAppointmentById = async (req, res) => {
 
         const appointment = await appointmentModel
             .findById(id)
-            .populate('patientId', 'name email phoneNumber')
-            .populate('doctorId', 'name specialty')
+            .populate({
+                path: 'patientId',
+                select: 'name email phoneNumber',
+                strictPopulate: false,
+            })
             .populate({
                 path: 'doctorId',
-                populate: { path: 'specialty', select: 'name' },
+                select: 'name specialty',
+                populate: { path: 'specialty', select: 'name', strictPopulate: false },
+                strictPopulate: false,
             });
 
         if (!appointment) {
@@ -391,11 +399,11 @@ const getAppointmentById = async (req, res) => {
             success: true,
             data: {
                 _id: appointment._id,
-                patientName: appointment.patientId.name,
-                patientEmail: appointment.patientId.email,
-                patientPhone: appointment.patientId.phoneNumber || 'N/A',
-                doctorName: appointment.doctorId.name,
-                doctorSpecialization: appointment.doctorId.specialty?.name || 'N/A',
+                patientName: appointment.patientId?.name || 'N/A',
+                patientEmail: appointment.patientId?.email || 'N/A',
+                patientPhone: appointment.patientId?.phoneNumber || 'N/A',
+                doctorName: appointment.doctorId?.name || 'N/A',
+                doctorSpecialization: appointment.doctorId?.specialty?.name || 'N/A',
                 appointmentDate: appointment.appointmentDate,
                 timeslot: appointment.timeslot,
                 status: appointment.status,
@@ -534,6 +542,13 @@ const editDoctor = async (req, res) => {
         }
 
         if (req.file) {
+            // Delete old image if it exists
+            if (doctor.image) {
+                const oldImagePath = path.join(__dirname, '..', 'public', doctor.image);
+                if (fs.existsSync(oldImagePath)) {
+                    fs.unlinkSync(oldImagePath);
+                }
+            }
             updateData.image = `/images/uploads/doctors/${req.file.filename}`;
         } else if (existingImage) {
             updateData.image = existingImage;
@@ -545,6 +560,11 @@ const editDoctor = async (req, res) => {
             new: true,
             runValidators: true,
         }).populate('specialty');
+
+        // Construct full image URL with cache-busting
+        const imageUrl = updatedDoctor.image
+            ? `${req.protocol}://${req.get('host')}${updatedDoctor.image}?t=${Date.now()}`
+            : '';
 
         res.status(200).json({
             message: 'Cập nhật bác sĩ thành công',
@@ -558,7 +578,7 @@ const editDoctor = async (req, res) => {
                 experience: updatedDoctor.experience,
                 about: updatedDoctor.about,
                 fees: updatedDoctor.fees,
-                image: updatedDoctor.image,
+                image: imageUrl,
                 createdAt: updatedDoctor.createdAt,
             },
         });
@@ -617,7 +637,9 @@ const getDoctorById = async (req, res) => {
                 experience: doctor.experience,
                 about: doctor.about,
                 fees: doctor.fees,
-                image: doctor.image || '',
+                image: doctor.image
+                    ? `${req.protocol}://${req.get('host')}${doctor.image}?t=${Date.now()}`
+                    : '',
                 createdAt: doctor.createdAt,
             },
         });
@@ -630,7 +652,22 @@ const getDoctorById = async (req, res) => {
 const getAllDoctors = async (req, res) => {
     try {
         const doctors = await doctorModel.find().populate('specialty');
-        res.status(200).json({ success: true, data: doctors });
+        const doctorsWithFullImageUrl = doctors.map(doctor => ({
+            _id: doctor._id,
+            name: doctor.name,
+            email: doctor.email,
+            specialty: doctor.specialty,
+            phone: doctor.phone,
+            location: doctor.location,
+            experience: doctor.experience,
+            about: doctor.about,
+            fees: doctor.fees,
+            image: doctor.image
+                ? `${req.protocol}://${req.get('host')}${doctor.image}?t=${Date.now()}`
+                : '',
+            createdAt: doctor.createdAt,
+        }));
+        res.status(200).json({ success: true, data: doctorsWithFullImageUrl });
     } catch (error) {
         console.error('Error fetching doctors:', error);
         res.status(500).json({ success: false, message: 'Server error', error: error.message });

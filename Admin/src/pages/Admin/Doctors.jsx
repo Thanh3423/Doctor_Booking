@@ -36,8 +36,11 @@ const DoctorsPage = () => {
   // Helper function to get full image URL
   const getImageUrl = (imagePath) => {
     if (!imagePath) return DEFAULT_IMAGE;
-    if (imagePath.startsWith('data:') || imagePath.startsWith('http')) return imagePath;
-    const url = `${backendUrl}${imagePath.startsWith('/') ? '' : '/'}${imagePath}`;
+    if (imagePath.startsWith('data:') || imagePath.startsWith('http')) {
+      // Append cache-busting timestamp for external or base64 images
+      return imagePath.includes('?') ? `${imagePath}&t=${Date.now()}` : `${imagePath}?t=${Date.now()}`;
+    }
+    const url = `${backendUrl}${imagePath.startsWith('/') ? '' : '/'}${imagePath}?t=${Date.now()}`;
     console.log('[DoctorsPage] Generated image URL:', url);
     return url;
   };
@@ -174,6 +177,13 @@ const DoctorsPage = () => {
     setImagePreview(previewUrl);
     setSelectedDoctor(doctor);
     setShowEditModal(true);
+  };
+
+  // View doctor
+  const viewDoctor = (doctor) => {
+    console.log('[DoctorsPage] Viewing doctor:', doctor);
+    setSelectedDoctor(doctor);
+    setShowViewModal(true);
   };
 
   // Validate form fields
@@ -320,12 +330,7 @@ const DoctorsPage = () => {
     }
   };
 
-  // View doctor
-  const viewDoctor = (doctor) => {
-    console.log('[DoctorsPage] Viewing doctor:', doctor);
-    setSelectedDoctor(doctor);
-    setShowViewModal(true);
-  };
+
 
   // Confirm delete
   const confirmDelete = (doctor) => {

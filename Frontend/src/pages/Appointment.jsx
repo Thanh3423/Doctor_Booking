@@ -257,7 +257,7 @@ function Appointment() {
         <div className="flex flex-col md:flex-row gap-6">
           <div className="md:w-1/2 bg-white p-6 rounded-xl shadow-lg">
             <img
-              src={`${backEndUrl}/images${doctor?.image || '/fallback-doctor-image.jpg'}`} // Adjusted image path
+              src={`${backEndUrl}${doctor?.image || '/fallback-doctor-image.jpg'}`} // Adjusted image path
               alt={`BS. ${doctor?.name || 'Bác sĩ'}`}
               className="w-full h-48 object-cover rounded-lg mb-4"
               onError={(e) => (e.target.src = '/fallback-doctor-image.jpg')}

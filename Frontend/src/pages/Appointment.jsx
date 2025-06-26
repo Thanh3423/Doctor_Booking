@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useContext } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { AppContext } from '../Context/AppContext';
 import { toast } from 'react-toastify';
 import axios from 'axios';
@@ -15,9 +15,11 @@ const fontStyle = `
 function Appointment() {
   const { docId } = useParams();
   const navigate = useNavigate();
-  const { doctor, getDoctorData, backEndUrl, token } = useContext(AppContext);
+  const location = useLocation();
+  const { doctor, getDoctorData, backEndUrl, token, loadUserProfileData } = useContext(AppContext);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [appointmentData, setAppointmentData] = useState({
     appointmentDate: '',
     timeslot: '',
@@ -26,36 +28,36 @@ function Appointment() {
   const [availableSlots, setAvailableSlots] = useState([]);
   const [error, setError] = useState(null);
 
-  // Redirect immediately if no token
+  // Check authentication status
   useEffect(() => {
-    if (!token) {
-      console.log('[Appointment] No token found, redirecting to login');
-      toast.error('Vui lòng đăng nhập để đặt lịch hẹn');
-      navigate('/login');
-    }
-  }, [token, navigate]);
-
-  // Skip rendering if no token (redundant but ensures no form is shown)
-  if (!token) {
-    return (
-      <section className="bg-gray-50 py-8 px-4 font-vietnamese min-h-screen">
-        <style>{fontStyle}</style>
-        <div className="text-center">
-          <p className="text-red-500 text-lg">Vui lòng đăng nhập để đặt lịch hẹn</p>
-          <button
-            onClick={() => navigate('/login')}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Đăng nhập
-          </button>
-        </div>
-      </section>
-    );
-  }
+    const checkAuth = async () => {
+      if (!token) {
+        console.log('[Appointment] No token found, redirecting to login');
+        toast.error('Vui lòng đăng nhập để đặt lịch hẹn');
+        navigate('/login', { state: { from: location.pathname } });
+        return;
+      }
+      try {
+        console.log('[Appointment] Validating token');
+        await loadUserProfileData(true); // Force reload to validate token
+        setIsAuthenticated(true);
+      } catch (err) {
+        console.error('[Appointment] Token validation failed:', {
+          message: err.message,
+          response: err.response?.data,
+          status: err.response?.status,
+        });
+        toast.error('Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.');
+        localStorage.removeItem('token');
+        localStorage.removeItem('userData');
+        navigate('/login', { state: { from: location.pathname } });
+      }
+    };
+    checkAuth();
+  }, [token, loadUserProfileData, navigate, location]);
 
   // Fetch doctor data
   useEffect(() => {
-    console.log('[Appointment] Raw docId from useParams:', docId);
     const fetchDoctor = async () => {
       try {
         setIsLoading(true);
@@ -98,6 +100,7 @@ function Appointment() {
     }
   }, [docId, getDoctorData, navigate]);
 
+  // Log doctor state changes
   useEffect(() => {
     console.log('[Appointment] Current doctor state:', doctor);
   }, [doctor]);
@@ -111,15 +114,21 @@ function Appointment() {
       }
       try {
         setError(null);
-        setAvailableSlots([]); // Reset slots before fetching
+        setAvailableSlots([]);
         const formattedDate = moment(appointmentData.appointmentDate)
           .tz('Asia/Ho_Chi_Minh')
           .format('YYYY-MM-DD');
+        if (!moment(formattedDate, 'YYYY-MM-DD', true).isValid()) {
+          console.warn('[Appointment] Invalid date format:', formattedDate);
+          setError('Định dạng ngày không hợp lệ');
+          return;
+        }
         console.log('[Appointment] Fetching slots for date:', formattedDate, 'doctorId:', docId);
+        console.log('[Appointment] Request URL:', `${backEndUrl}/patient/doctor/schedule/${docId}?date=${formattedDate}`);
         const { data } = await axios.get(
           `${backEndUrl}/patient/doctor/schedule/${docId}?date=${formattedDate}`,
           {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
             withCredentials: true,
           }
         );
@@ -142,18 +151,15 @@ function Appointment() {
         setError(message);
         if (err.response?.status === 404) {
           toast.warn(message);
-        } else if (err.response?.status === 401) {
-          toast.error('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
-          navigate('/login');
         } else {
           toast.error(message);
         }
       }
     };
-    if (doctor && appointmentData.appointmentDate) {
+    if (doctor && appointmentData.appointmentDate && isAuthenticated) {
       fetchAvailableSlots();
     }
-  }, [appointmentData.appointmentDate, docId, backEndUrl, doctor, navigate]);
+  }, [appointmentData.appointmentDate, docId, backEndUrl, doctor, token, isAuthenticated]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -166,6 +172,13 @@ function Appointment() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!isAuthenticated || !token) {
+      console.log('[Appointment] No token found, redirecting to login');
+      toast.error('Vui lòng đăng nhập để đặt lịch hẹn');
+      navigate('/login', { state: { from: location.pathname } });
+      return;
+    }
+
     if (!appointmentData.appointmentDate || !appointmentData.timeslot) {
       toast.error('Vui lòng chọn ngày và khung giờ');
       return;
@@ -224,7 +237,33 @@ function Appointment() {
               : err.response?.data?.message || 'Lỗi máy chủ khi đặt lịch hẹn';
       toast.error(errorMessage);
       if (err.response?.status === 401) {
-        navigate('/login');
+        navigate('/login', { state: { from: location.pathname } });
+      } else {
+        setAppointmentData((prev) => ({ ...prev, timeslot: '' }));
+        try {
+          const formattedDate = moment(appointmentData.appointmentDate)
+            .tz('Asia/Ho_Chi_Minh')
+            .format('YYYY-MM-DD');
+          const { data } = await axios.get(
+            `${backEndUrl}/patient/doctor/schedule/${docId}?date=${formattedDate}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+              withCredentials: true,
+            }
+          );
+          console.log('[Appointment] Refreshed slots after error:', data);
+          if (data.success && Array.isArray(data.data)) {
+            setAvailableSlots(data.data);
+            setError(null);
+          } else {
+            setAvailableSlots([]);
+            setError(data.message || 'Không có khung giờ trống cho ngày này');
+          }
+        } catch (refreshErr) {
+          console.error('[Appointment] Error refreshing slots:', refreshErr);
+          setAvailableSlots([]);
+          setError('Không thể làm mới khung giờ trống');
+        }
       }
     } finally {
       setIsSubmitting(false);
@@ -260,6 +299,23 @@ function Appointment() {
             className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             Quay lại danh sách bác sĩ
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <section className="bg-gray-50 py-8 px-4 font-vietnamese min-h-screen">
+        <style>{fontStyle}</style>
+        <div className="text-center">
+          <p className="text-red-500 text-lg">Vui lòng đăng nhập để đặt lịch hẹn</p>
+          <button
+            onClick={() => navigate('/login', { state: { from: location.pathname } })}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Đăng nhập
           </button>
         </div>
       </section>
@@ -341,6 +397,7 @@ function Appointment() {
                   className="w-full px-2 py-2 border rounded-md focus:outline-none focus:ring-blue-500"
                   min={moment().tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DD')}
                   required
+                  disabled={!isAuthenticated}
                 />
               </div>
               <div className="mb-4">
@@ -351,7 +408,7 @@ function Appointment() {
                   onChange={handleInputChange}
                   className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-blue-500"
                   required
-                  disabled={!appointmentData.appointmentDate || availableSlots.length === 0}
+                  disabled={!isAuthenticated || !appointmentData.appointmentDate || availableSlots.length === 0}
                 >
                   <option value="">
                     {availableSlots.length === 0
@@ -383,12 +440,14 @@ function Appointment() {
                   className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-blue-500"
                   rows="4"
                   placeholder="Ghi chú nếu cần..."
+                  disabled={!isAuthenticated}
                 />
               </div>
               <button
                 type="submit"
                 className="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-300"
                 disabled={
+                  !isAuthenticated ||
                   isSubmitting ||
                   !appointmentData.appointmentDate ||
                   !appointmentData.timeslot
@@ -396,6 +455,18 @@ function Appointment() {
               >
                 {isSubmitting ? 'Đang xử lý...' : 'Đặt lịch'}
               </button>
+              {!isAuthenticated && (
+                <p className="text-gray-600 text-sm mt-2 text-center">
+                  Bạn cần{' '}
+                  <button
+                    onClick={() => navigate('/login', { state: { from: location.pathname } })}
+                    className="text-blue-500 hover:underline"
+                  >
+                    đăng nhập
+                  </button>{' '}
+                  để đặt lịch hẹn
+                </p>
+              )}
             </form>
           </div>
         </div>

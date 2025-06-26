@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useContext, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -38,7 +37,7 @@ function DoctorCard() {
     for (let i = 1; i <= 5; i++) {
       if (i <= normalizedRating) {
         stars.push(<i key={i} className="fa-solid fa-star text-yellow-500 text-lg"></i>);
-      } else if (i - 0.5 === normalizedRating) {
+      } else if (i - 0.5 <= normalizedRating) {
         stars.push(<i key={i} className="fa-solid fa-star-half-stroke text-yellow-500 text-lg"></i>);
       } else {
         stars.push(<i key={i} className="fa-regular fa-star text-gray-300 text-lg"></i>);
@@ -49,7 +48,7 @@ function DoctorCard() {
 
   const getImageUrl = (image) => {
     if (!image || !image.trim()) return '/fallback-doctor-image.jpg';
-    return `${backEndUrl}/images/uploads/doctors/${image.split('/').pop()}`;
+    return `${backEndUrl}${image.startsWith('/') ? image : `/images/uploads/doctors/${image}`}`;
   };
 
   const imageUrls = useMemo(() => {
@@ -61,39 +60,49 @@ function DoctorCard() {
   }, [filterDoc, backEndUrl]);
 
   const fetchAndIntegrateRatings = useCallback(async () => {
-    if (ratingsFetched) return;
+    if (ratingsFetched) {
+      console.log('[DoctorCard] Ratings already fetched, skipping...');
+      return;
+    }
     try {
       setIsLoading(true);
-      const response = await axios.get(`${backEndUrl}/doctor/all-ratings`);
+      console.log('[DoctorCard] Fetching ratings from:', `${backEndUrl}/doctor/all-ratings`);
+      const response = await axios.get(`${backEndUrl}/doctor/all-ratings`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        withCredentials: true,
+      });
+      console.log('[DoctorCard] Ratings API response:', response.data);
       const ratingsData = response.data || [];
       const updatedDoctors = allDoctors.map((doc) => {
         const ratingInfo = ratingsData.find((r) => String(r._id) === String(doc._id));
         return {
           ...doc,
-          averageRating: ratingInfo ? parseFloat(ratingInfo.averageRating) : 0,
-          totalReviews: ratingInfo ? ratingInfo.totalReviews : 0,
+          averageRating: ratingInfo ? parseFloat(ratingInfo.averageRating) || 0 : 0,
+          totalReviews: ratingInfo ? ratingInfo.totalReviews || 0 : 0,
         };
       });
       setAllDoctors(updatedDoctors);
       setRatingsFetched(true);
     } catch (err) {
+      console.error('[DoctorCard] Error fetching ratings:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+      });
       setError('Không thể tải đánh giá bác sĩ.');
-      toast.error('Không thể tải đánh giá bác sĩ.');
+      toast.warn('Không thể tải đánh giá bác sĩ.');
     } finally {
       setIsLoading(false);
     }
-  }, [allDoctors, backEndUrl, setAllDoctors, ratingsFetched]);
+  }, [allDoctors, backEndUrl, setAllDoctors, ratingsFetched, token]);
 
   const handleBookAppointment = (doctorId) => {
-    if (!token) {
-      toast.error("Vui lòng đăng nhập để đặt lịch hẹn");
-      navigate("/login");
+    if (!doctorId || !doctorId.match(/^[0-9a-fA-F]{24}$/)) {
+      console.warn('[DoctorCard] Invalid doctorId:', doctorId);
+      toast.error('ID bác sĩ không hợp lệ');
       return;
     }
-    if (!doctorId.match(/^[0-9a-fA-F]{24}$/)) {
-      toast.error("ID bác sĩ không hợp lệ");
-      return;
-    }
+    console.log('[DoctorCard] Navigating to appointment for doctorId:', doctorId);
     navigate(`/appointment/${doctorId}`);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -118,6 +127,7 @@ function DoctorCard() {
   useEffect(() => {
     if (allDoctors.length === 0) {
       setFilterDoc([]);
+      setIsLoading(false);
       return;
     }
     const uniqueDoctors = Array.from(new Map(allDoctors.map((doc) => [doc._id, doc])).values());
@@ -136,6 +146,7 @@ function DoctorCard() {
       });
     }
     setFilterDoc(currentFiltered);
+    setIsLoading(false);
   }, [speciality, searchQuery, allDoctors]);
 
   if (isLoading) {
@@ -258,7 +269,7 @@ function DoctorCard() {
                       alt={`BS. ${doctor.name || 'Bác sĩ'}`}
                       onError={(e) => {
                         if (e.target.src !== '/fallback-doctor-image.jpg' && !loggedImages.has(doctor.image)) {
-                          console.log(`Failed to load image for doctor: ${doctor.name || 'Unknown'} (ID: ${doctor._id}, Image: ${doctor.image})`);
+                          console.log(`[DoctorCard] Failed to load image for doctor: ${doctor.name || 'Unknown'} (ID: ${doctor._id}, Image: ${doctor.image})`);
                           setLoggedImages((prev) => new Set(prev).add(doctor.image));
                           e.target.src = '/fallback-doctor-image.jpg';
                         }

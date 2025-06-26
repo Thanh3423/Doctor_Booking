@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import { AppContext } from "../Context/AppContext";
 
@@ -21,6 +21,15 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const { setToken, setUserData, backEndUrl } = useContext(AppContext);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Reset fields when switching between login and register
+  useEffect(() => {
+    setEmail("");
+    setPassword("");
+    setConfirmPassword("");
+    setName("");
+  }, [isRegister]);
 
   // Kiểm tra trạng thái xác thực
   useEffect(() => {
@@ -33,7 +42,8 @@ const LoginPage = () => {
             headers: { Authorization: `Bearer ${token}` },
             withCredentials: true,
           });
-          navigate("/");
+          const redirectTo = location.state?.from || "/";
+          navigate(redirectTo, { replace: true });
           toast.info("Bạn đã đăng nhập!");
         } catch (error) {
           console.error("[LoginPage] Token invalid:", {
@@ -49,7 +59,7 @@ const LoginPage = () => {
       }
     };
     checkAuth();
-  }, [navigate, backEndUrl, setToken, setUserData]);
+  }, [navigate, backEndUrl, setToken, setUserData, location]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -73,14 +83,15 @@ const LoginPage = () => {
         withCredentials: true,
       });
       console.log("[LoginPage] Response:", res.data);
-      const { token, user } = res.data.data; // Adjusted to match backend response structure
+      const { token, user } = res.data.data;
       localStorage.setItem("token", token);
       if (user) {
         localStorage.setItem("userData", JSON.stringify(user));
         setUserData(user);
       }
       setToken(token);
-      navigate("/");
+      const redirectTo = location.state?.from || "/";
+      navigate(redirectTo, { replace: true });
       toast.success(isRegister ? "Đăng ký thành công!" : "Đăng nhập thành công!");
     } catch (error) {
       console.error("[LoginPage] API error:", {
@@ -109,18 +120,42 @@ const LoginPage = () => {
         </h2>
 
         {/* Form */}
-        <form className="flex flex-col gap-4 outline-none" onSubmit={handleSubmit}>
+        <form
+          className="flex flex-col gap-4 outline-none"
+          onSubmit={handleSubmit}
+          autoComplete={isRegister ? "off" : "on"}
+        >
+          {/* Dummy fields to trick autofill */}
+          {isRegister && (
+            <>
+              <input
+                type="email"
+                name="dummy-email"
+                style={{ display: "none" }}
+                autoComplete="email"
+              />
+              <input
+                type="password"
+                name="dummy-password"
+                style={{ display: "none" }}
+                autoComplete="current-password"
+              />
+            </>
+          )}
+
           {/* Hiển thị trường Họ và tên khi đăng ký */}
           {isRegister && (
             <div>
               <label className="block text-gray-600 font-medium">Họ và tên</label>
               <input
                 type="text"
+                name="register-name"
                 placeholder="Nhập họ và tên của bạn"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
                 required
+                autoComplete="off"
               />
             </div>
           )}
@@ -129,11 +164,13 @@ const LoginPage = () => {
             <label className="block text-gray-600 font-medium">Email</label>
             <input
               type="email"
+              name={isRegister ? "register-email" : "email"}
               placeholder="Nhập email của bạn"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 border outline-none rounded-lg focus:ring-2 focus:ring-blue-400"
+              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
               required
+              autoComplete={isRegister ? "off" : "email"}
             />
           </div>
 
@@ -141,11 +178,13 @@ const LoginPage = () => {
             <label className="block text-gray-600 font-medium">Mật khẩu</label>
             <input
               type="password"
+              name={isRegister ? "register-password" : "password"}
               placeholder="Nhập mật khẩu của bạn"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
               required
+              autoComplete={isRegister ? "new-password" : "current-password"}
             />
           </div>
 
@@ -155,11 +194,13 @@ const LoginPage = () => {
               <label className="block text-gray-600 font-medium">Xác nhận mật khẩu</label>
               <input
                 type="password"
+                name="register-confirm-password"
                 placeholder="Nhập lại mật khẩu"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
                 required
+                autoComplete="new-password"
               />
             </div>
           )}

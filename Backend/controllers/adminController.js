@@ -132,10 +132,8 @@ const createSchedule = async (req, res) => {
 
         const existingSchedule = await scheduleModel.findOne({ doctorId, weekStartDate: startDate });
         if (existingSchedule) {
-            return res.status(400).json({ message: 'Schedule alreadywash already exists for this doctor and week' });
+            return res.status(400).json({ message: 'Schedule already exists for this doctor and week' });
         }
-
-
 
         const validDays = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
         const daysMap = {
@@ -253,35 +251,105 @@ const updateSchedule = async (req, res) => {
             return res.status(400).json({ message: 'Invalid availability format or day-date mismatch' });
         }
 
-        const conflictingAppointments = await appointmentModel.find({
-            doctorId: schedule.doctorId._id,
-            appointmentDate: { $gte: startDate, $lte: moment.tz(startDate, 'Asia/Ho_Chi_Minh').endOf('week').toDate() },
-            timeslot: {
-                $in: availability
-                    .flatMap(slot => slot.timeSlots)
-                    .filter(ts => ts.isBooked)
-                    .map(ts => ts.time),
-            },
-        });
+        // Collect existing booked slots
+        const existingBookedSlots = schedule.availability.flatMap(slot =>
+            slot.timeSlots.filter(ts => ts.isBooked).map(ts => ({
+                day: slot.day,
+                date: slot.date,
+                time: ts.time,
+                patientId: ts.patientId,
+            }))
+        );
 
-        if (conflictingAppointments.length > 0) {
-            return res.status(400).json({ message: 'Cannot update schedule due to conflicting appointments' });
+        // Check for conflicts: only flag if booked slots are removed or marked unavailable
+        const conflicts = [];
+        for (const slot of availability) {
+            const bookedSlotsForDay = existingBookedSlots.filter(bs => bs.day === slot.day);
+            if (!slot.isAvailable && bookedSlotsForDay.length > 0) {
+                // Day is marked unavailable but has booked slots
+                const conflictingAppointments = await appointmentModel.find({
+                    doctorId: schedule.doctorId._id,
+                    appointmentDate: slot.date,
+                    timeslot: { $in: bookedSlotsForDay.map(bs => bs.time) },
+                });
+                if (conflictingAppointments.length > 0) {
+                    conflicts.push({
+                        day: slot.day,
+                        date: slot.date,
+                        appointments: conflictingAppointments.map(appt => ({
+                            appointmentId: appt._id,
+                            timeslot: appt.timeslot,
+                            patientId: appt.patientId,
+                        })),
+                    });
+                }
+            } else if (slot.isAvailable) {
+                // Check if any booked slots are missing or marked unavailable in the new time slots
+                const newTimes = slot.timeSlots.map(ts => ts.time);
+                const removedOrUnavailableSlots = bookedSlotsForDay.filter(
+                    bs => !newTimes.includes(bs.time) ||
+                        slot.timeSlots.find(ts => ts.time === bs.time && !ts.isAvailable)
+                );
+                if (removedOrUnavailableSlots.length > 0) {
+                    const conflictingAppointments = await appointmentModel.find({
+                        doctorId: schedule.doctorId._id,
+                        appointmentDate: slot.date,
+                        timeslot: { $in: removedOrUnavailableSlots.map(rs => rs.time) },
+                    });
+                    if (conflictingAppointments.length > 0) {
+                        conflicts.push({
+                            day: slot.day,
+                            date: slot.date,
+                            appointments: conflictingAppointments.map(appt => ({
+                                appointmentId: appt._id,
+                                timeslot: appt.timeslot,
+                                patientId: appt.patientId,
+                            })),
+                        });
+                    }
+                }
+            }
         }
 
+        if (conflicts.length > 0) {
+            console.log('[updateSchedule] Conflicting appointments:', conflicts);
+            return res.status(400).json({
+                message: 'Không thể cập nhật lịch do xung đột lịch hẹn',
+                conflicts,
+            });
+        }
+
+        // Update the schedule, preserving booked slots and adding new ones
         schedule.weekStartDate = startDate;
         schedule.weekNumber = weekNumber;
         schedule.year = year;
-        schedule.availability = availability.map((slot, index) => ({
-            day: slot.day,
-            date: moment.tz(startDate, 'Asia/Ho_Chi_Minh').add(index, 'days').startOf('day').toDate(),
-            isAvailable: slot.isAvailable,
-            timeSlots: slot.isAvailable ? slot.timeSlots.map(ts => ({
-                time: ts.time,
-                isBooked: ts.isBooked || false,
-                isAvailable: ts.isAvailable !== undefined ? ts.isAvailable : true,
-                patientId: ts.isBooked ? ts.patientId || null : null,
-            })) : [],
-        }));
+        schedule.availability = availability.map((slot, index) => {
+            const bookedSlotsForDay = existingBookedSlots.filter(bs => bs.day === slot.day);
+            const newTimeSlots = slot.isAvailable ? slot.timeSlots : [];
+            // Preserve booked slots and merge with new slots
+            const mergedTimeSlots = [
+                ...bookedSlotsForDay.map(bs => ({
+                    time: bs.time,
+                    isBooked: true,
+                    isAvailable: true, // Booked slots remain available
+                    patientId: bs.patientId,
+                })),
+                ...newTimeSlots
+                    .filter(ts => !bookedSlotsForDay.some(bs => bs.time === ts.time))
+                    .map(ts => ({
+                        time: ts.time,
+                        isBooked: false,
+                        isAvailable: ts.isAvailable !== undefined ? ts.isAvailable : true,
+                        patientId: null,
+                    })),
+            ];
+            return {
+                day: slot.day,
+                date: moment.tz(startDate, 'Asia/Ho_Chi_Minh').add(index, 'days').startOf('day').toDate(),
+                isAvailable: slot.isAvailable,
+                timeSlots: slot.isAvailable ? mergedTimeSlots : [],
+            };
+        });
 
         await schedule.save();
         const populatedSchedule = await scheduleModel
@@ -349,7 +417,7 @@ const getAllAppointments = async (req, res) => {
                 populate: { path: 'specialty', select: 'name', strictPopulate: false },
                 strictPopulate: false,
             })
-            .sort({ createdAt: -1 }); // Sort by createdAt in descending order
+            .sort({ createdAt: -1 });
         res.status(200).json({
             success: true,
             data: appointments.map(a => ({
@@ -542,7 +610,6 @@ const editDoctor = async (req, res) => {
         }
 
         if (req.file) {
-            // Delete old image if it exists
             if (doctor.image) {
                 const oldImagePath = path.join(__dirname, '..', 'public', doctor.image);
                 if (fs.existsSync(oldImagePath)) {
@@ -561,7 +628,6 @@ const editDoctor = async (req, res) => {
             runValidators: true,
         }).populate('specialty');
 
-        // Construct full image URL with cache-busting
         const imageUrl = updatedDoctor.image
             ? `${req.protocol}://${req.get('host')}${updatedDoctor.image}?t=${Date.now()}`
             : '';

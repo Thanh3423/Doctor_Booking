@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Search, X, Plus, Edit, Trash2, Eye, Calendar, CheckCircle, XCircle } from 'lucide-react';
+import { Search, X, Plus, Edit, Trash2, Eye, Calendar } from 'lucide-react';
 import { AppContext } from '../../context/AppContext';
 import axios from 'axios';
 import { toast } from 'react-toastify';
@@ -18,11 +18,10 @@ const AdminSchedulePage = () => {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [showViewModal, setShowViewModal] = useState(false);
     const [selectedSchedule, setSelectedSchedule] = useState(null);
-    const [filterWeek, setFilterWeek] = useState(''); // Initialize as empty
+    const [filterWeek, setFilterWeek] = useState('');
 
     const { aToken, backEndUrl } = useContext(AppContext);
 
-    // Initialize availability with correct day names and dates
     const initializeAvailability = (weekStart) => {
         const daysMap = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
         return daysMap.map((day, index) => ({
@@ -71,6 +70,23 @@ const AdminSchedulePage = () => {
         if (aToken && backEndUrl) fetchData();
     }, [aToken, backEndUrl, filterWeek]);
 
+    const parseTimeSlot = (time) => {
+        const [start, end] = time.split('-').map(t => {
+            const [hour, minute] = t.split(':').map(Number);
+            return hour * 60 + minute;
+        });
+        return { start, end };
+    };
+
+    const hasTimeSlotOverlap = (timeSlots, newSlot) => {
+        if (!newSlot.match(/^\d{2}:\d{2}-\d{2}:\d{2}$/)) return true;
+        const { start: newStart, end: newEnd } = parseTimeSlot(newSlot);
+        return timeSlots.some(slot => {
+            const { start, end } = parseTimeSlot(slot.time);
+            return (newStart < end && newEnd > start);
+        });
+    };
+
     const handleTimeSlotInputChange = (day, value) => {
         const updatedAvailability = formData.availability.map(item =>
             item.day === day ? { ...item, inputValue: value } : item
@@ -80,23 +96,36 @@ const AdminSchedulePage = () => {
 
     const handleAvailabilityToggle = (day) => {
         const updatedAvailability = formData.availability.map(item =>
-            item.day === day ? { ...item, isAvailable: !item.isAvailable, timeSlots: [], inputValue: '' } : item
+            item.day === day
+                ? {
+                    ...item,
+                    isAvailable: !item.isAvailable,
+                    timeSlots: item.isAvailable ? item.timeSlots.filter(slot => slot.isBooked) : item.timeSlots,
+                    inputValue: item.isAvailable ? item.inputValue : '',
+                }
+                : item
         );
         setFormData({ ...formData, availability: updatedAvailability });
     };
 
     const processTimeSlots = (day, inputValue) => {
-        const slots = inputValue
+        const dayData = formData.availability.find(item => item.day === day);
+        const existingSlots = dayData.timeSlots;
+        const bookedSlots = existingSlots.filter(slot => slot.isBooked);
+        const bookedTimes = bookedSlots.map(slot => slot.time);
+        const newSlots = inputValue
             .split(',')
+            .map(slot => slot.trim())
+            .filter(slot => slot && /^\d{2}:\d{2}-\d{2}:\d{2}$/.test(slot) && !bookedTimes.includes(slot) && !hasTimeSlotOverlap(existingSlots, slot))
             .map(slot => ({
-                time: slot.trim(),
+                time: slot,
                 isBooked: false,
                 isAvailable: true,
                 patientId: null,
-            }))
-            .filter(slot => slot.time && /^\d{2}:\d{2}-\d{2}:\d{2}$/.test(slot.time));
+            }));
+        const mergedSlots = [...bookedSlots, ...newSlots];
         const updatedAvailability = formData.availability.map(item =>
-            item.day === day ? { ...item, timeSlots: slots, inputValue } : item
+            item.day === day ? { ...item, timeSlots: mergedSlots, inputValue: newSlots.map(slot => slot.time).join(', ') } : item
         );
         setFormData({ ...formData, availability: updatedAvailability });
     };
@@ -134,7 +163,6 @@ const AdminSchedulePage = () => {
         if (!formData.weekStartDate) return 'Ngày bắt đầu tuần là bắt buộc.';
         for (const item of formData.availability) {
             if (item.isAvailable) {
-                processTimeSlots(item.day, item.inputValue);
                 for (const slot of item.timeSlots) {
                     if (!slot.time || !/^\d{2}:\d{2}-\d{2}:\d{2}$/.test(slot.time)) {
                         return `Khung giờ không hợp lệ cho ${item.day} (VD: 09:00-10:00).`;
@@ -172,8 +200,6 @@ const AdminSchedulePage = () => {
             const payload = {
                 doctorId: formData.doctorId,
                 weekStartDate: weekStart.toDate(),
-                weekNumber: weekStart.week(),
-                year: weekStart.year(),
                 availability: formData.availability.map((item, index) => ({
                     day: item.day,
                     date: moment.tz(weekStart, 'Asia/Ho_Chi_Minh').add(index, 'days').startOf('day').toDate(),
@@ -210,7 +236,10 @@ const AdminSchedulePage = () => {
                     isAvailable: slot.isAvailable,
                     patientId: slot.patientId || null,
                 })),
-                inputValue: item.timeSlots.map(slot => slot.time).join(', '),
+                inputValue: item.timeSlots
+                    .filter(slot => !slot.isBooked)
+                    .map(slot => slot.time)
+                    .join(', '),
                 isAvailable: item.isAvailable,
             })),
         });
@@ -231,15 +260,21 @@ const AdminSchedulePage = () => {
             const weekStart = moment.tz(formData.weekStartDate, 'Asia/Ho_Chi_Minh').startOf('week');
             const payload = {
                 weekStartDate: weekStart.toDate(),
-                weekNumber: weekStart.week(),
-                year: weekStart.year(),
                 availability: formData.availability.map((item, index) => ({
                     day: item.day,
                     date: moment.tz(weekStart, 'Asia/Ho_Chi_Minh').add(index, 'days').startOf('day').toDate(),
                     isAvailable: item.isAvailable,
-                    timeSlots: item.isAvailable ? item.timeSlots : [],
+                    timeSlots: item.isAvailable
+                        ? item.timeSlots.map(slot => ({
+                            time: slot.time,
+                            isBooked: slot.isBooked,
+                            isAvailable: slot.isAvailable,
+                            patientId: slot.patientId,
+                        }))
+                        : [],
                 })),
             };
+            console.log('[handleUpdate] Payload:', JSON.stringify(payload, null, 2));
             const response = await axios.put(
                 `${backEndUrl}/admin/schedules/${selectedSchedule._id}`,
                 payload,
@@ -252,7 +287,14 @@ const AdminSchedulePage = () => {
             resetForm();
         } catch (error) {
             console.error('[AdminSchedulePage] Error updating schedule:', error);
-            toast.error(error.response?.data?.message || 'Không thể cập nhật lịch.');
+            const errorMessage = error.response?.data?.message || 'Không thể cập nhật lịch.';
+            const conflicts = error.response?.data?.conflicts;
+            if (conflicts) {
+                const conflictDetails = conflicts.map(c => `${c.day} (${moment(c.date).format('DD/MM/YYYY')}): ${c.appointments.map(a => a.timeslot).join(', ')}`).join('; ');
+                toast.error(`${errorMessage}: ${conflictDetails}`);
+            } else {
+                toast.error(errorMessage);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -478,19 +520,28 @@ const AdminSchedulePage = () => {
                                                             type="button"
                                                             onClick={() => handleAvailabilityToggle(item.day)}
                                                             className={`px-2 py-1 text-xs rounded ${item.isAvailable ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}
+                                                            disabled={item.timeSlots.some(slot => slot.isBooked)}
+                                                            title={item.timeSlots.some(slot => slot.isBooked) ? 'Không thể thay đổi vì có khung giờ đã đặt' : ''}
                                                         >
                                                             {item.isAvailable ? 'Làm việc' : 'Nghỉ'}
                                                         </button>
                                                     </div>
                                                     {item.isAvailable && (
-                                                        <input
-                                                            type="text"
-                                                            value={item.inputValue}
-                                                            onChange={e => handleTimeSlotInputChange(item.day, e.target.value)}
-                                                            onBlur={() => processTimeSlots(item.day, item.inputValue)}
-                                                            placeholder="VD: 09:00-10:00, 14:00-15:00"
-                                                            className="mt-1 w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
-                                                        />
+                                                        <>
+                                                            <input
+                                                                type="text"
+                                                                value={item.inputValue}
+                                                                onChange={e => handleTimeSlotInputChange(item.day, e.target.value)}
+                                                                onBlur={() => processTimeSlots(item.day, item.inputValue)}
+                                                                placeholder="VD: 09:00-10:00, 14:00-15:00"
+                                                                className="mt-1 w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
+                                                            />
+                                                            {item.timeSlots.some(slot => slot.isBooked) && (
+                                                                <p className="text-xs text-red-500 mt-0.5">
+                                                                    Khung giờ đã đặt (không thể sửa): {item.timeSlots.filter(slot => slot.isBooked).map(slot => slot.time).join(', ')}
+                                                                </p>
+                                                            )}
+                                                        </>
                                                     )}
                                                 </div>
                                             ))}
@@ -546,7 +597,7 @@ const AdminSchedulePage = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700">Khung giờ làm việc</label>
-                                    <p className="text-xs text-gray-500 mt-0.5 mb-2">Nhập định dạng 09:00-10:00, cách nhau bằng dấu phẩy</p>
+                                    <p className="text-xs text-gray-500 mt-0.5 mb-2">Nhập định dạng 09:00-10:00, cách nhau bằng dấu phẩy (khung giờ đã đặt không thể sửa)</p>
                                     <div className="max-h-64 overflow-y-auto pr-2">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {formData.availability.map((item, index) => (
@@ -559,6 +610,8 @@ const AdminSchedulePage = () => {
                                                             type="button"
                                                             onClick={() => handleAvailabilityToggle(item.day)}
                                                             className={`px-2 py-1 text-xs rounded ${item.isAvailable ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}
+                                                            disabled={item.timeSlots.some(slot => slot.isBooked)}
+                                                            title={item.timeSlots.some(slot => slot.isBooked) ? 'Không thể thay đổi vì có khung giờ đã đặt' : ''}
                                                         >
                                                             {item.isAvailable ? 'Làm việc' : 'Nghỉ'}
                                                         </button>
@@ -574,7 +627,9 @@ const AdminSchedulePage = () => {
                                                                 className="mt-1 w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
                                                             />
                                                             {item.timeSlots.some(slot => slot.isBooked) && (
-                                                                <p className="text-xs text-red-500 mt-0.5">Có khung giờ đã được đặt.</p>
+                                                                <p className="text-xs text-red-500 mt-0.5">
+                                                                    Khung giờ đã đặt (không thể sửa): {item.timeSlots.filter(slot => slot.isBooked).map(slot => slot.time).join(', ')}
+                                                                </p>
                                                             )}
                                                         </>
                                                     )}
@@ -599,7 +654,7 @@ const AdminSchedulePage = () => {
                                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm shadow-sm"
                                         disabled={isLoading}
                                     >
-                                        {isLoading ? 'Đang cập nhật...' : 'Cập nhật'}
+                                        {isLoading ? 'Đang cập nhật...' : 'Cập nhật lịch'}
                                     </button>
                                 </div>
                             </form>
@@ -610,20 +665,15 @@ const AdminSchedulePage = () => {
                 {showDeleteModal && selectedSchedule && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                         <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">
-                            <div className="flex items-center gap-2 mb-4">
-                                <Trash2 className="h-5 w-5 text-red-600" />
-                                <h3 className="text-lg font-semibold text-gray-800">Xác nhận xóa</h3>
-                            </div>
-                            <p className="text-sm text-gray-600 mb-6">
+                            <h3 className="text-lg font-semibold text-gray-800 mb-4">Xác nhận xóa lịch</h3>
+                            <p className="text-sm text-gray-600 mb-4">
                                 Bạn có chắc chắn muốn xóa lịch làm việc của bác sĩ{' '}
-                                <span className="font-semibold">{selectedSchedule.doctorId.name}</span> tuần {selectedSchedule.weekNumber}/{selectedSchedule.year}? Hành động này không thể hoàn tác.
+                                <span className="font-medium">{selectedSchedule.doctorId.name}</span> trong tuần{' '}
+                                {selectedSchedule.weekNumber}/{selectedSchedule.year}?
                             </p>
                             <div className="flex justify-end gap-2">
                                 <button
-                                    onClick={() => {
-                                        setShowDeleteModal(false);
-                                        setSelectedSchedule(null);
-                                    }}
+                                    onClick={() => setShowDeleteModal(false)}
                                     className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm shadow-sm"
                                 >
                                     Hủy bỏ
@@ -642,78 +692,57 @@ const AdminSchedulePage = () => {
 
                 {showViewModal && selectedSchedule && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                        <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-xl">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-2">
-                                    <Eye className="h-5 w-5 text-blue-600" />
-                                    <h3 className="text-lg font-semibold text-gray-800">
-                                        Lịch làm việc của {selectedSchedule.doctorId.name} (Tuần {selectedSchedule.weekNumber}/{selectedSchedule.year})
-                                    </h3>
+                        <div className="bg-white rounded-xl p-6 w-full max-w-2xl shadow-2xl">
+                            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                <Eye size={20} /> Chi tiết lịch làm việc
+                            </h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Bác sĩ</label>
+                                    <p className="mt-1 text-sm text-gray-600">{selectedSchedule.doctorId.name}</p>
                                 </div>
-                                <button
-                                    onClick={() => {
-                                        setShowViewModal(false);
-                                        setSelectedSchedule(null);
-                                    }}
-                                    className="text-gray-500 hover:text-gray-700 transition"
-                                >
-                                    <X size={20} />
-                                </button>
-                            </div>
-                            <div className="max-h-96 overflow-y-auto space-y-4 pr-2">
-                                {selectedSchedule.availability.map((item, index) => (
-                                    <div
-                                        key={index}
-                                        className="p-4 bg-gray-50 rounded-lg shadow-sm hover:shadow-md transition"
-                                    >
-                                        <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
-                                            {item.day} ({moment(item.date).format('DD/MM/YYYY')})
-                                            {item.isAvailable ? (
-                                                <span className="text-xs text-green-600 ml-2">
-                                                    (Làm việc, {item.timeSlots.length} khung giờ)
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs text-red-600 ml-2">(Nghỉ)</span>
-                                            )}
-                                        </h4>
-                                        {item.isAvailable && item.timeSlots.length > 0 ? (
-                                            <div className="flex flex-wrap gap-2">
-                                                {item.timeSlots.map(slot => (
-                                                    <div
-                                                        key={slot._id}
-                                                        className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${slot.isBooked
-                                                            ? 'bg-red-100 text-red-600 hover:bg-red-200'
-                                                            : slot.isAvailable
-                                                                ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-                                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                                            }`}
-                                                    >
-                                                        {slot.isBooked ? (
-                                                            <XCircle size={14} className="text-red-500" />
-                                                        ) : slot.isAvailable ? (
-                                                            <CheckCircle size={14} className="text-blue-500" />
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Email</label>
+                                    <p className="mt-1 text-sm text-gray-600">{selectedSchedule.doctorId.email}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Tuần</label>
+                                    <p className="mt-1 text-sm text-gray-600">
+                                        Tuần {selectedSchedule.weekNumber}/{selectedSchedule.year}
+                                    </p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Lịch làm việc</label>
+                                    <div className="mt-1 grid grid-cols-1 md:grid-cols-2 gap-4 max-h-64 overflow-y-auto pr-2">
+                                        {selectedSchedule.availability.map((item, index) => (
+                                            <div key={index} className="mb-2">
+                                                <p className="text-xs font-medium text-gray-600">
+                                                    {item.day} ({moment(item.date).format('DD/MM/YYYY')})
+                                                </p>
+                                                <p className="text-xs text-gray-500">
+                                                    {item.isAvailable ? (
+                                                        item.timeSlots.length > 0 ? (
+                                                            item.timeSlots.map((slot, idx) => (
+                                                                <span key={idx} className="inline-block mr-2">
+                                                                    {slot.time} {slot.isBooked ? '(Đã đặt)' : ''}
+                                                                </span>
+                                                            ))
                                                         ) : (
-                                                            <XCircle size={14} className="text-gray-500" />
-                                                        )}
-                                                        <span>{slot.time}</span>
-                                                    </div>
-                                                ))}
+                                                            <span className="text-gray-400">Không có khung giờ</span>
+                                                        )
+                                                    ) : (
+                                                        <span className="text-red-500">Nghỉ</span>
+                                                    )}
+                                                </p>
                                             </div>
-                                        ) : (
-                                            <p className="text-sm text-gray-500 italic">
-                                                {item.isAvailable ? 'Không có khung giờ làm việc' : 'Ngày nghỉ'}
-                                            </p>
-                                        )}
+                                        ))}
                                     </div>
-                                ))}
+                                </div>
                             </div>
                             <div className="flex justify-end mt-6">
                                 <button
-                                    onClick={() => {
-                                        setShowViewModal(false);
-                                        setSelectedSchedule(null);
-                                    }}
-                                    className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-semibold shadow-sm"
+                                    onClick={() => setShowViewModal(false)}
+                                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm shadow-sm"
                                 >
                                     Đóng
                                 </button>

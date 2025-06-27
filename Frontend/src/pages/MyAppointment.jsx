@@ -4,12 +4,13 @@ import { AppContext } from '../Context/AppContext';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import moment from 'moment-timezone';
 
 // Google Fonts for Vietnamese
 const fontStyle = `
-  @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
   .font-vietnamese {
-    font-family: 'Roboto', 'Noto Sans', Arial, sans-serif;
+    font-family: 'Inter', 'Roboto', 'Noto Sans', Arial, sans-serif;
   }
 `;
 
@@ -20,6 +21,8 @@ const MyAppointments = () => {
   const [selectedTab, setSelectedTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const appointmentsPerPage = 10;
   const { token, setToken, setUserData, backEndUrl } = useContext(AppContext);
   const navigate = useNavigate();
 
@@ -29,11 +32,31 @@ const MyAppointments = () => {
       console.log('[getImageUrl] No image path provided, returning null');
       return null;
     }
-    // Remove any leading path segments to get just the filename
     const cleanPath = imagePath.replace(/^\/?(?:images\/)?(?:uploads\/)?(?:doctors\/)?/, '');
     const url = `${backEndUrl}/images/uploads/doctors/${cleanPath}?t=${Date.now()}`;
     console.log('[getImageUrl] Constructed URL:', url, 'from path:', imagePath);
     return url;
+  };
+
+  // Check if appointment is within 1 hour of current time
+  const isWithinOneHour = (appointmentDate, timeslot) => {
+    try {
+      const [startTime] = timeslot.split('-');
+      const [hours, minutes] = startTime.split(':').map(Number);
+      const apptDateTime = moment.tz(appointmentDate, 'Asia/Ho_Chi_Minh')
+        .set({ hour: hours, minute: minutes, second: 0, millisecond: 0 });
+      const currentDateTime = moment.tz('Asia/Ho_Chi_Minh');
+      const timeDiff = apptDateTime.diff(currentDateTime, 'minutes');
+      console.log('[isWithinOneHour] Appointment:', {
+        appointmentDate: apptDateTime.format(),
+        currentDateTime: currentDateTime.format(),
+        timeDiff,
+      });
+      return timeDiff < 60;
+    } catch (error) {
+      console.warn('[isWithinOneHour] Error parsing date:', { appointmentDate, timeslot, error: error.message });
+      return false;
+    }
   };
 
   // Fetch Appointments
@@ -69,6 +92,7 @@ const MyAppointments = () => {
       }
 
       setAppointments(appointmentsData);
+      setCurrentPage(1);
       console.log('[fetchAppointments] Set appointments:', appointmentsData.length);
     } catch (error) {
       console.error('[fetchAppointments] Error:', {
@@ -135,22 +159,18 @@ const MyAppointments = () => {
     }
   };
 
-  // Format date (exclude time)
+  // Format date
   const formatDate = (dateString) => {
     try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('vi-VN', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
+      const date = moment.tz(dateString, 'Asia/Ho_Chi_Minh');
+      return date.format('DD MMM YYYY');
     } catch (error) {
       console.warn('[formatDate] Invalid date:', dateString);
       return dateString;
     }
   };
 
-  // Filter appointments
+  // Filter and paginate appointments
   const filteredAppointments = () => {
     let filtered = selectedTab === 'upcoming' ? upcomingAppointments : selectedTab === 'past' ? pastAppointments : appointments;
     if (searchQuery) {
@@ -166,6 +186,59 @@ const MyAppointments = () => {
     return filtered;
   };
 
+  const paginatedAppointments = () => {
+    const filtered = filteredAppointments();
+    const startIndex = (currentPage - 1) * appointmentsPerPage;
+    const endIndex = startIndex + appointmentsPerPage;
+    return filtered.slice(startIndex, endIndex);
+  };
+
+  const totalPages = Math.ceil(filteredAppointments().length / appointmentsPerPage);
+
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+    const maxPagesToShow = 5;
+    const sidePages = 2;
+
+    if (totalPages <= maxPagesToShow) {
+      for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i);
+      }
+    } else {
+      let startPage = Math.max(1, currentPage - sidePages);
+      let endPage = Math.min(totalPages, currentPage + sidePages);
+
+      if (currentPage <= sidePages + 1) {
+        endPage = maxPagesToShow - 1;
+      } else if (currentPage >= totalPages - sidePages) {
+        startPage = totalPages - maxPagesToShow + 2;
+      }
+
+      if (startPage > 1) {
+        pageNumbers.push(1);
+        if (startPage > 2) pageNumbers.push('...');
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        pageNumbers.push(i);
+      }
+
+      if (endPage < totalPages) {
+        if (endPage < totalPages - 1) pageNumbers.push('...');
+        pageNumbers.push(totalPages);
+      }
+    }
+    return pageNumbers;
+  };
+
+  const handlePageChange = (page) => {
+    if (page !== '...' && page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      console.log('[handlePageChange] Changed to page:', page);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   useEffect(() => {
     if (token) {
       fetchAppointments();
@@ -177,38 +250,49 @@ const MyAppointments = () => {
   // Separate past and upcoming appointments
   useEffect(() => {
     if (appointments.length > 0) {
-      const current = new Date();
-      setUpcomingAppointments(appointments.filter((appt) => new Date(appt.appointmentDate) >= current));
-      setPastAppointments(appointments.filter((appt) => new Date(appt.appointmentDate) < current));
+      const current = moment.tz('Asia/Ho_Chi_Minh');
+      setUpcomingAppointments(
+        appointments.filter((appt) => moment.tz(appt.appointmentDate, 'Asia/Ho_Chi_Minh') >= current)
+      );
+      setPastAppointments(
+        appointments.filter((appt) => moment.tz(appt.appointmentDate, 'Asia/Ho_Chi_Minh') < current)
+      );
+      setCurrentPage(1);
     }
   }, [appointments]);
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 md:p-8 flex flex-col items-center font-vietnamese">
+    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8 font-vietnamese">
       <style>{fontStyle}</style>
-      <div className="w-full max-w-4xl">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6 text-center">
+      <div className="max-w-5xl mx-auto">
+        <h1 className="text-3xl font-bold text-gray-900 mb-8 text-center">
           Lịch Hẹn Của Tôi
         </h1>
 
         {/* Search and Filter */}
-        <div className="mb-6 flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
+        <div className="mb-8 flex flex-col sm:flex-row gap-4 items-center">
+          <div className="relative flex-1 w-full sm:w-auto">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
               type="text"
               placeholder="Tìm kiếm theo tên bác sĩ, chuyên khoa hoặc ngày..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
             />
           </div>
-          <div className="bg-white rounded-lg shadow-sm p-2 w-full md:w-48">
+          <div className="w-full sm:w-48">
             <select
               id="filter"
               value={selectedTab}
-              onChange={(e) => setSelectedTab(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
+              onChange={(e) => {
+                setSelectedTab(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full p-3 border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 text-sm transition-all duration-200"
             >
               <option value="all">Tất cả</option>
               <option value="upcoming">Sắp tới</option>
@@ -219,99 +303,131 @@ const MyAppointments = () => {
 
         {/* Appointment List */}
         {isLoading ? (
-          <div className="w-full bg-white rounded-lg shadow-md p-6 text-center">
-            <p className="text-gray-500 text-lg">Đang tải lịch hẹn...</p>
+          <div className="bg-white rounded-lg shadow-md p-8 text-center">
+            <p className="text-gray-600 text-lg animate-pulse">Đang tải lịch hẹn...</p>
           </div>
         ) : filteredAppointments().length === 0 ? (
-          <div className="w-full bg-white rounded-lg shadow-md p-6 text-center">
-            <p className="text-gray-500 text-lg">
+          <div className="bg-white rounded-lg shadow-md p-8 text-center">
+            <p className="text-gray-600 text-lg mb-4">
               Không tìm thấy lịch hẹn {selectedTab === 'upcoming' ? 'sắp tới' : selectedTab === 'past' ? 'đã qua' : ''}.
             </p>
             <button
               onClick={() => navigate('/book-appointment')}
-              className="mt-4 bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-all"
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200"
             >
               Đặt Lịch Hẹn
             </button>
           </div>
         ) : (
-          <div className="space-y-4">
-            {filteredAppointments().map((appt) => (
-              <div
-                key={appt._id}
-                className="bg-white rounded-lg shadow-md p-4 flex items-center gap-4 hover:shadow-lg transition-all"
-              >
-                {/* Doctor Image */}
-                {appt.doctorId?.image ? (
-                  <img
-                    src={getImageUrl(appt.doctorId.image)}
-                    alt={appt.doctorId?.name || 'Bác sĩ'}
-                    className="w-12 h-12 rounded-full object-cover border border-gray-200"
-                    onError={(e) => {
-                      console.warn('[MyAppointments] Image load failed:', e.target.src);
-                      e.target.src = '/path/to/placeholder-image.jpg'; // Replace with actual placeholder path
-                    }}
-                  />
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 border border-gray-200">
-                    BS
+          <>
+            <div className="grid gap-6">
+              {paginatedAppointments().map((appt) => (
+                <div
+                  key={appt._id}
+                  className="bg-white rounded-lg shadow-md p-6 flex items-center gap-6 hover:shadow-xl transition-all duration-200"
+                >
+                  {/* Doctor Image */}
+                  {appt.doctorId?.image ? (
+                    <img
+                      src={getImageUrl(appt.doctorId.image)}
+                      alt={appt.doctorId?.name || 'Bác sĩ'}
+                      className="w-16 h-16 rounded-full object-cover border border-gray-200"
+                      onError={(e) => {
+                        console.warn('[MyAppointments] Image load failed:', e.target.src);
+                        e.target.src = '/images/fallback-doctor.jpg';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-lg font-medium border border-gray-200">
+                      BS
+                    </div>
+                  )}
+
+                  {/* Appointment Details */}
+                  <div className="flex-1">
+                    <p className="text-xl font-semibold text-gray-900">
+                      {appt.doctorId?.name || 'Bác sĩ không xác định'}
+                    </p>
+                    <p className="text-gray-600 text-sm">
+                      Chuyên khoa: {appt.doctorId?.specialty?.name || 'Không có thông tin'}
+                    </p>
+                    <p className="text-gray-500 text-sm">
+                      Ngày: {formatDate(appt.appointmentDate)}
+                    </p>
+                    <p className="text-gray-500 text-sm">
+                      Giờ: {appt.timeslot || 'Không xác định'}
+                    </p>
                   </div>
-                )}
 
-                {/* Appointment Details */}
-                <div className="flex-1">
-                  <p className="text-lg font-semibold text-gray-800">
-                    {appt.doctorId?.name || 'Bác sĩ không xác định'}
-                  </p>
-                  <p className="text-gray-600 text-sm">
-                    Chuyên khoa: {appt.doctorId?.specialty?.name || 'Không có thông tin'}
-                  </p>
-                  <p className="text-gray-500 text-sm">
-                    Ngày: {formatDate(appt.appointmentDate)}
-                  </p>
-                  <p className="text-gray-500 text-sm">
-                    Giờ: {appt.timeslot || 'Không xác định'}
-                  </p>
+                  {/* Status and Action Buttons */}
+                  <div className="flex flex-col gap-3 items-end">
+                    <span
+                      className={`text-sm font-medium px-3 py-1 rounded-full ${appt.status === 'cancelled'
+                          ? 'bg-red-100 text-red-700'
+                          : appt.status === 'pending'
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-green-100 text-green-700'
+                        }`}
+                    >
+                      {appt.status === 'cancelled' ? 'Đã hủy' : appt.status === 'pending' ? 'Chờ xác nhận' : 'Hoàn thành'}
+                    </span>
+                    {appt.status === 'pending' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          cancelAppointment(appt._id);
+                        }}
+                        disabled={isWithinOneHour(appt.appointmentDate, appt.timeslot)}
+                        className={`px-4 py-2 text-sm rounded-md transition-all duration-200 ${isWithinOneHour(appt.appointmentDate, appt.timeslot)
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-200'
+                          }`}
+                        title={
+                          isWithinOneHour(appt.appointmentDate, appt.timeslot)
+                            ? 'Không thể hủy trong vòng 1 giờ trước giờ khám'
+                            : 'Hủy lịch hẹn'
+                        }
+                      >
+                        Hủy
+                      </button>
+                    )}
+                    {appt.status === 'completed' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/appointments/${appt._id}`);
+                        }}
+                        className="px-4 py-2 text-sm bg-blue-50 text-blue-600 rounded-md border border-blue-200 hover:bg-blue-600 hover:text-white transition-all duration-200"
+                      >
+                        Xem chi tiết
+                      </button>
+                    )}
+                  </div>
                 </div>
+              ))}
+            </div>
 
-                {/* Status and Action Buttons */}
-                <div className="flex flex-col gap-2">
-                  <span
-                    className={`text-xs font-medium px-2 py-1 rounded-full w-28 text-center ${appt.status === 'cancelled'
-                        ? 'bg-red-100 text-red-700'
-                        : appt.status === 'pending'
-                          ? 'bg-yellow-100 text-yellow-700'
-                          : 'bg-green-100 text-green-700'
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="mt-8 flex justify-center items-center gap-2">
+                {getPageNumbers().map((page, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handlePageChange(page)}
+                    disabled={page === '...' || page === currentPage}
+                    className={`px-4 py-2 text-sm rounded-md transition-all duration-200 ${page === currentPage
+                        ? 'bg-blue-600 text-white'
+                        : page === '...'
+                          ? 'text-gray-500 cursor-default'
+                          : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-600'
                       }`}
                   >
-                    {appt.status === 'cancelled' ? 'Đã hủy' : appt.status === 'pending' ? 'Chờ xác nhận' : 'Hoàn thành'}
-                  </span>
-                  {appt.status === 'pending' && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        cancelAppointment(appt._id);
-                      }}
-                      className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded-md border border-red-200 hover:bg-red-600 hover:text-white transition-all w-28 text-center"
-                    >
-                      Hủy
-                    </button>
-                  )}
-                  {appt.status === 'completed' && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/appointments/${appt._id}`);
-                      }}
-                      className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-md border border-blue-200 hover:bg-blue-600 hover:text-white transition-all w-28 text-center"
-                    >
-                      Xem chi tiết
-                    </button>
-                  )}
-                </div>
+                    {page}
+                  </button>
+                ))}
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </div>
     </div>

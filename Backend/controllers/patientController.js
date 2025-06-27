@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const moment = require("moment");
+const moment = require("moment-timezone");
 const Joi = require("joi");
 const patientModel = require("../models/patient.model");
 const appointmentModel = require("../models/appointment.model");
@@ -554,15 +554,18 @@ const cancelAppointment = async (req, res) => {
     const patientId = req.user.id;
 
     if (!mongoose.Types.ObjectId.isValid(appointmentId)) {
+      console.warn("[cancelAppointment] Invalid appointment ID:", appointmentId);
       return res.status(400).json({ success: false, message: "ID lịch hẹn không hợp lệ" });
     }
 
     const appointment = await appointmentModel.findOne({ _id: appointmentId, patientId });
     if (!appointment) {
+      console.warn("[cancelAppointment] Appointment not found or unauthorized:", { appointmentId, patientId });
       return res.status(404).json({ success: false, message: "Không tìm thấy lịch hẹn hoặc bạn không có quyền hủy" });
     }
 
     if (appointment.status === "cancelled") {
+      console.warn("[cancelAppointment] Appointment already cancelled:", appointmentId);
       return res.status(400).json({ success: false, message: "Lịch hẹn đã được hủy trước đó" });
     }
 
@@ -583,6 +586,17 @@ const cancelAppointment = async (req, res) => {
         currentDateTime: currentDateTime.format(),
       });
       return res.status(400).json({ success: false, message: "Không thể hủy lịch hẹn đã qua" });
+    }
+
+    // Check if the appointment is within 1 hour from now
+    const timeDiff = appointmentDateTime.diff(currentDateTime, 'minutes');
+    if (timeDiff < 60) {
+      console.warn("[cancelAppointment] Appointment too close to cancel:", {
+        appointmentId,
+        timeDiff,
+        appointmentDateTime: appointmentDateTime.format(),
+      });
+      return res.status(400).json({ success: false, message: "Không thể hủy lịch hẹn trong vòng 1 giờ trước giờ khám" });
     }
 
     appointment.status = "cancelled";
@@ -689,7 +703,7 @@ const submitReview = async (req, res) => {
 
     const existingReview = await reviewModel.findOne({ appointmentId });
     if (existingReview) {
-      return res.status(400).json({ success: false, message: "Bạn đã đánh giá lịch hẹn này" });
+      return res.status404.json({ success: false, message: "Bạn đã đánh giá lịch hẹn này" });
     }
 
     const newReview = await reviewModel.create({

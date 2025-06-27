@@ -24,13 +24,21 @@ const AdminSchedulePage = () => {
 
     const initializeAvailability = (weekStart) => {
         const daysMap = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
-        return daysMap.map((day, index) => ({
-            day,
-            date: moment.tz(weekStart, 'Asia/Ho_Chi_Minh').startOf('week').add(index, 'days').toDate(),
-            timeSlots: [],
-            inputValue: '',
-            isAvailable: true,
-        }));
+        const currentDate = moment.tz('Asia/Ho_Chi_Minh').startOf('day');
+        const weekStartDate = moment.tz(weekStart, 'Asia/Ho_Chi_Minh').startOf('week');
+
+        return daysMap.map((day, index) => {
+            const slotDate = moment.tz(weekStartDate, 'Asia/Ho_Chi_Minh').add(index, 'days').startOf('day');
+            const isPastOrCurrentDay = slotDate.isSameOrBefore(currentDate, 'day'); // Disable current day and before
+            return {
+                day,
+                date: slotDate.toDate(),
+                timeSlots: [],
+                inputValue: '',
+                isAvailable: !isPastOrCurrentDay,
+                isDisabled: isPastOrCurrentDay,
+            };
+        });
     };
 
     const [formData, setFormData] = useState({
@@ -95,13 +103,15 @@ const AdminSchedulePage = () => {
     };
 
     const handleAvailabilityToggle = (day) => {
+        const dayData = formData.availability.find(item => item.day === day);
+        if (dayData.isDisabled || dayData.timeSlots.some(slot => slot.isBooked)) return;
         const updatedAvailability = formData.availability.map(item =>
             item.day === day
                 ? {
                     ...item,
                     isAvailable: !item.isAvailable,
                     timeSlots: item.isAvailable ? item.timeSlots.filter(slot => slot.isBooked) : item.timeSlots,
-                    inputValue: item.isAvailable ? item.inputValue : '',
+                    inputValue: item.isAvailable ? '' : item.inputValue,
                 }
                 : item
         );
@@ -110,6 +120,7 @@ const AdminSchedulePage = () => {
 
     const processTimeSlots = (day, inputValue) => {
         const dayData = formData.availability.find(item => item.day === day);
+        if (dayData.isDisabled) return;
         const existingSlots = dayData.timeSlots;
         const bookedSlots = existingSlots.filter(slot => slot.isBooked);
         const bookedTimes = bookedSlots.map(slot => slot.time);
@@ -136,18 +147,13 @@ const AdminSchedulePage = () => {
 
     const handleWeekChange = (e) => {
         const value = e.target.value;
-        setFilterWeek(value);
-        if (value) {
-            const weekStart = moment.tz(value, 'Asia/Ho_Chi_Minh').startOf('week');
-            const updatedAvailability = initializeAvailability(weekStart);
-            setFormData({ ...formData, weekStartDate: value, availability: updatedAvailability });
-        } else {
-            setFormData({
-                ...formData,
-                weekStartDate: moment().tz('Asia/Ho_Chi_Minh').startOf('week').format('YYYY-MM-DD'),
-                availability: initializeAvailability(moment().tz('Asia/Ho_Chi_Minh').startOf('week')),
-            });
-        }
+        const weekStart = moment.tz(value, 'Asia/Ho_Chi_Minh').startOf('week');
+        const updatedAvailability = initializeAvailability(weekStart);
+        setFormData({ ...formData, weekStartDate: value, availability: updatedAvailability });
+    };
+
+    const handleFilterWeekChange = (e) => {
+        setFilterWeek(e.target.value);
     };
 
     const resetForm = () => {
@@ -161,14 +167,11 @@ const AdminSchedulePage = () => {
     const validateForm = () => {
         if (!formData.doctorId) return 'Bác sĩ là bắt buộc.';
         if (!formData.weekStartDate) return 'Ngày bắt đầu tuần là bắt buộc.';
+        const weekStart = moment.tz(formData.weekStartDate, 'Asia/Ho_Chi_Minh').startOf('week');
+        if (weekStart.isBefore(moment.tz('Asia/Ho_Chi_Minh').startOf('week'), 'week')) {
+            return 'Không thể tạo/cập nhật lịch cho tuần đã qua.';
+        }
         for (const item of formData.availability) {
-            if (item.isAvailable) {
-                for (const slot of item.timeSlots) {
-                    if (!slot.time || !/^\d{2}:\d{2}-\d{2}:\d{2}$/.test(slot.time)) {
-                        return `Khung giờ không hợp lệ cho ${item.day} (VD: 09:00-10:00).`;
-                    }
-                }
-            }
             const expectedDay = moment.tz(item.date, 'Asia/Ho_Chi_Minh').format('dddd');
             const daysMap = {
                 'Monday': 'Thứ 2',
@@ -181,6 +184,13 @@ const AdminSchedulePage = () => {
             };
             if (daysMap[expectedDay] !== item.day) {
                 return `Ngày ${item.day} không khớp với ngày thực tế ${moment(item.date).format('DD/MM/YYYY')}`;
+            }
+            if (item.isAvailable && !item.isDisabled) {
+                for (const slot of item.timeSlots) {
+                    if (!slot.time || !/^\d{2}:\d{2}-\d{2}:\d{2}$/.test(slot.time)) {
+                        return `Khung giờ không hợp lệ cho ${item.day} (VD: 09:00-10:00).`;
+                    }
+                }
             }
         }
         return null;
@@ -207,6 +217,7 @@ const AdminSchedulePage = () => {
                     timeSlots: item.isAvailable ? item.timeSlots : [],
                 })),
             };
+            console.log('[handleCreate] Sending payload:', JSON.stringify(payload, null, 2));
             const response = await axios.post(`${backEndUrl}/admin/schedules`, payload, {
                 headers: { Authorization: `Bearer ${aToken}` },
             });
@@ -224,24 +235,30 @@ const AdminSchedulePage = () => {
 
     const openEditModal = schedule => {
         const weekStart = moment.tz(schedule.weekStartDate, 'Asia/Ho_Chi_Minh').startOf('week');
+        const currentDate = moment.tz('Asia/Ho_Chi_Minh').startOf('day');
         setFormData({
             doctorId: schedule.doctorId._id,
             weekStartDate: weekStart.format('YYYY-MM-DD'),
-            availability: schedule.availability.map((item, index) => ({
-                day: item.day,
-                date: moment.tz(weekStart, 'Asia/Ho_Chi_Minh').add(index, 'days').startOf('day').toDate(),
-                timeSlots: item.timeSlots.map(slot => ({
-                    time: slot.time,
-                    isBooked: slot.isBooked,
-                    isAvailable: slot.isAvailable,
-                    patientId: slot.patientId || null,
-                })),
-                inputValue: item.timeSlots
-                    .filter(slot => !slot.isBooked)
-                    .map(slot => slot.time)
-                    .join(', '),
-                isAvailable: item.isAvailable,
-            })),
+            availability: schedule.availability.map((item, index) => {
+                const slotDate = moment.tz(weekStart, 'Asia/Ho_Chi_Minh').add(index, 'days').startOf('day');
+                const isPastOrCurrentDay = slotDate.isSameOrBefore(currentDate, 'day'); // Disable current day and before
+                return {
+                    day: item.day,
+                    date: slotDate.toDate(),
+                    timeSlots: item.timeSlots.map(slot => ({
+                        time: slot.time,
+                        isBooked: slot.isBooked,
+                        isAvailable: slot.isAvailable,
+                        patientId: slot.patientId || null,
+                    })),
+                    inputValue: item.timeSlots
+                        .filter(slot => !slot.isBooked)
+                        .map(slot => slot.time)
+                        .join(', '),
+                    isAvailable: item.isAvailable,
+                    isDisabled: isPastOrCurrentDay,
+                };
+            }),
         });
         setSelectedSchedule(schedule);
         setShowEditModal(true);
@@ -274,7 +291,7 @@ const AdminSchedulePage = () => {
                         : [],
                 })),
             };
-            console.log('[handleUpdate] Payload:', JSON.stringify(payload, null, 2));
+            console.log('[handleUpdate] Sending payload:', JSON.stringify(payload, null, 2));
             const response = await axios.put(
                 `${backEndUrl}/admin/schedules/${selectedSchedule._id}`,
                 payload,
@@ -372,12 +389,12 @@ const AdminSchedulePage = () => {
                         <input
                             type="date"
                             value={filterWeek}
-                            onChange={handleWeekChange}
+                            onChange={handleFilterWeekChange}
                             className="mt-1 p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
                         />
                         {filterWeek && (
                             <button
-                                onClick={() => handleWeekChange({ target: { value: '' } })}
+                                onClick={() => setFilterWeek('')}
                                 className="mt-1 px-2 py-1 text-sm text-gray-600 hover:text-gray-800"
                                 title="Xóa bộ lọc"
                             >
@@ -501,13 +518,14 @@ const AdminSchedulePage = () => {
                                         type="date"
                                         value={formData.weekStartDate}
                                         onChange={handleWeekChange}
+                                        min={moment().tz('Asia/Ho_Chi_Minh').startOf('week').add(1, 'week').format('YYYY-MM-DD')} // Start from next week
                                         className="mt-1 w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
                                         required
                                     />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700">Khung giờ làm việc</label>
-                                    <p className="text-xs text-gray-500 mt-0.5 mb-2">Nhập định dạng 09:00-10:00, cách nhau bằng dấu phẩy</p>
+                                    <p className="text-xs text-gray-500 mt-0.5 mb-2">Nhập định dạng 09:00-10:00, cách nhau bằng dấu phẩy (khung giờ đã đặt không thể sửa)</p>
                                     <div className="max-h-64 overflow-y-auto pr-2">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {formData.availability.map((item, index) => (
@@ -519,14 +537,14 @@ const AdminSchedulePage = () => {
                                                         <button
                                                             type="button"
                                                             onClick={() => handleAvailabilityToggle(item.day)}
-                                                            className={`px-2 py-1 text-xs rounded ${item.isAvailable ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}
-                                                            disabled={item.timeSlots.some(slot => slot.isBooked)}
-                                                            title={item.timeSlots.some(slot => slot.isBooked) ? 'Không thể thay đổi vì có khung giờ đã đặt' : ''}
+                                                            className={`px-2 py-1 text-xs rounded ${item.isAvailable ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'} ${item.isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                            disabled={item.isDisabled || item.timeSlots.some(slot => slot.isBooked)}
+                                                            title={item.isDisabled ? 'Ngày đã qua hoặc hiện tại, không thể chỉnh sửa' : item.timeSlots.some(slot => slot.isBooked) ? 'Không thể thay đổi vì có khung giờ đã đặt' : ''}
                                                         >
                                                             {item.isAvailable ? 'Làm việc' : 'Nghỉ'}
                                                         </button>
                                                     </div>
-                                                    {item.isAvailable && (
+                                                    {item.isAvailable && !item.isDisabled && (
                                                         <>
                                                             <input
                                                                 type="text"
@@ -542,6 +560,14 @@ const AdminSchedulePage = () => {
                                                                 </p>
                                                             )}
                                                         </>
+                                                    )}
+                                                    {item.isDisabled && (
+                                                        <p className="text-xs text-gray-500 mt-0.5">
+                                                            Ngày đã qua hoặc hiện tại, không thể chỉnh sửa.
+                                                            {item.timeSlots.some(slot => slot.isBooked) && (
+                                                                <> Khung giờ đã đặt: {item.timeSlots.filter(slot => slot.isBooked).map(slot => slot.time).join(', ')}</>
+                                                            )}
+                                                        </p>
                                                     )}
                                                 </div>
                                             ))}
@@ -591,6 +617,7 @@ const AdminSchedulePage = () => {
                                         type="date"
                                         value={formData.weekStartDate}
                                         onChange={handleWeekChange}
+                                        min={moment().tz('Asia/Ho_Chi_Minh').startOf('week').add(1, 'week').format('YYYY-MM-DD')} // Start from next week
                                         className="mt-1 w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
                                         required
                                     />
@@ -609,14 +636,14 @@ const AdminSchedulePage = () => {
                                                         <button
                                                             type="button"
                                                             onClick={() => handleAvailabilityToggle(item.day)}
-                                                            className={`px-2 py-1 text-xs rounded ${item.isAvailable ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}
-                                                            disabled={item.timeSlots.some(slot => slot.isBooked)}
-                                                            title={item.timeSlots.some(slot => slot.isBooked) ? 'Không thể thay đổi vì có khung giờ đã đặt' : ''}
+                                                            className={`px-2 py-1 text-xs rounded ${item.isAvailable ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'} ${item.isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                            disabled={item.isDisabled || item.timeSlots.some(slot => slot.isBooked)}
+                                                            title={item.isDisabled ? 'Ngày đã qua hoặc hiện tại, không thể chỉnh sửa' : item.timeSlots.some(slot => slot.isBooked) ? 'Không thể thay đổi vì có khung giờ đã đặt' : ''}
                                                         >
                                                             {item.isAvailable ? 'Làm việc' : 'Nghỉ'}
                                                         </button>
                                                     </div>
-                                                    {item.isAvailable && (
+                                                    {item.isAvailable && !item.isDisabled && (
                                                         <>
                                                             <input
                                                                 type="text"
@@ -632,6 +659,14 @@ const AdminSchedulePage = () => {
                                                                 </p>
                                                             )}
                                                         </>
+                                                    )}
+                                                    {item.isDisabled && (
+                                                        <p className="text-xs text-gray-500 mt-0.5">
+                                                            Ngày đã qua hoặc hiện tại, không thể chỉnh sửa.
+                                                            {item.timeSlots.some(slot => slot.isBooked) && (
+                                                                <> Khung giờ đã đặt: {item.timeSlots.filter(slot => slot.isBooked).map(slot => slot.time).join(', ')}</>
+                                                            )}
+                                                        </p>
                                                     )}
                                                 </div>
                                             ))}

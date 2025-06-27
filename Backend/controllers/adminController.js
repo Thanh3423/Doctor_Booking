@@ -127,6 +127,11 @@ const createSchedule = async (req, res) => {
         }
 
         const startDate = moment.tz(weekStartDate, 'Asia/Ho_Chi_Minh').startOf('week').startOf('day').toDate();
+        const currentDate = moment.tz('Asia/Ho_Chi_Minh').startOf('day').toDate();
+        if (moment(startDate).isBefore(moment().tz('Asia/Ho_Chi_Minh').startOf('week'))) {
+            return res.status(400).json({ message: 'Cannot create schedule for a past week' });
+        }
+
         const weekNumber = moment.tz(startDate, 'Asia/Ho_Chi_Minh').week();
         const year = moment.tz(startDate, 'Asia/Ho_Chi_Minh').year();
 
@@ -135,7 +140,7 @@ const createSchedule = async (req, res) => {
             return res.status(400).json({ message: 'Schedule already exists for this doctor and week' });
         }
 
-        const validDays = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
+        const validDays = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
         const daysMap = {
             'Monday': 'Thứ 2',
             'Tuesday': 'Thứ 3',
@@ -149,6 +154,10 @@ const createSchedule = async (req, res) => {
         const isValidAvailability = availability.every((slot, index) => {
             const expectedDate = moment.tz(startDate, 'Asia/Ho_Chi_Minh').add(index, 'days').startOf('day');
             const actualDay = moment.tz(slot.date, 'Asia/Ho_Chi_Minh').format('dddd');
+            const isPastDay = moment.tz(slot.date, 'Asia/Ho_Chi_Minh').isBefore(currentDate, 'day');
+            if (isPastDay && slot.isAvailable) {
+                return false; // Prevent enabling availability for past days
+            }
             return (
                 validDays.includes(slot.day) &&
                 slot.day === daysMap[actualDay] &&
@@ -164,7 +173,7 @@ const createSchedule = async (req, res) => {
         });
 
         if (!isValidAvailability) {
-            return res.status(400).json({ message: 'Invalid availability format or day-date mismatch' });
+            return res.status(400).json({ message: 'Invalid availability format, day-date mismatch, or attempting to enable past days' });
         }
 
         const newSchedule = new scheduleModel({
@@ -216,10 +225,15 @@ const updateSchedule = async (req, res) => {
         }
 
         const startDate = moment.tz(weekStartDate, 'Asia/Ho_Chi_Minh').startOf('week').startOf('day').toDate();
+        const currentDate = moment.tz('Asia/Ho_Chi_Minh').startOf('day').toDate();
+        if (moment(startDate).isBefore(moment().tz('Asia/Ho_Chi_Minh').startOf('week'))) {
+            return res.status(400).json({ message: 'Cannot update schedule for a past week' });
+        }
+
         const weekNumber = moment.tz(startDate, 'Asia/Ho_Chi_Minh').week();
         const year = moment.tz(startDate, 'Asia/Ho_Chi_Minh').year();
 
-        const validDays = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
+        const validDays = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
         const daysMap = {
             'Monday': 'Thứ 2',
             'Tuesday': 'Thứ 3',
@@ -233,6 +247,10 @@ const updateSchedule = async (req, res) => {
         const isValidAvailability = availability.every((slot, index) => {
             const expectedDate = moment.tz(startDate, 'Asia/Ho_Chi_Minh').add(index, 'days').startOf('day');
             const actualDay = moment.tz(slot.date, 'Asia/Ho_Chi_Minh').format('dddd');
+            const isPastDay = moment.tz(slot.date, 'Asia/Ho_Chi_Minh').isBefore(currentDate, 'day'); // Không chặn ngày hiện tại
+            if (isPastDay && slot.isAvailable) {
+                return false; // Ngăn bật isAvailable cho ngày đã qua
+            }
             return (
                 validDays.includes(slot.day) &&
                 slot.day === daysMap[actualDay] &&
@@ -248,7 +266,7 @@ const updateSchedule = async (req, res) => {
         });
 
         if (!isValidAvailability) {
-            return res.status(400).json({ message: 'Invalid availability format or day-date mismatch' });
+            return res.status(400).json({ message: 'Invalid availability format, day-date mismatch, or attempting to enable past days' });
         }
 
         // Collect existing booked slots
@@ -261,12 +279,11 @@ const updateSchedule = async (req, res) => {
             }))
         );
 
-        // Check for conflicts: only flag if booked slots are removed or marked unavailable
+        // Check for conflicts
         const conflicts = [];
         for (const slot of availability) {
             const bookedSlotsForDay = existingBookedSlots.filter(bs => bs.day === slot.day);
             if (!slot.isAvailable && bookedSlotsForDay.length > 0) {
-                // Day is marked unavailable but has booked slots
                 const conflictingAppointments = await appointmentModel.find({
                     doctorId: schedule.doctorId._id,
                     appointmentDate: slot.date,
@@ -284,7 +301,6 @@ const updateSchedule = async (req, res) => {
                     });
                 }
             } else if (slot.isAvailable) {
-                // Check if any booked slots are missing or marked unavailable in the new time slots
                 const newTimes = slot.timeSlots.map(ts => ts.time);
                 const removedOrUnavailableSlots = bookedSlotsForDay.filter(
                     bs => !newTimes.includes(bs.time) ||
@@ -319,19 +335,18 @@ const updateSchedule = async (req, res) => {
             });
         }
 
-        // Update the schedule, preserving booked slots and adding new ones
+        // Update the schedule
         schedule.weekStartDate = startDate;
         schedule.weekNumber = weekNumber;
         schedule.year = year;
         schedule.availability = availability.map((slot, index) => {
             const bookedSlotsForDay = existingBookedSlots.filter(bs => bs.day === slot.day);
             const newTimeSlots = slot.isAvailable ? slot.timeSlots : [];
-            // Preserve booked slots and merge with new slots
             const mergedTimeSlots = [
                 ...bookedSlotsForDay.map(bs => ({
                     time: bs.time,
                     isBooked: true,
-                    isAvailable: true, // Booked slots remain available
+                    isAvailable: true,
                     patientId: bs.patientId,
                 })),
                 ...newTimeSlots
@@ -373,6 +388,10 @@ const deleteSchedule = async (req, res) => {
         const schedule = await scheduleModel.findById(id).populate('doctorId', 'name email');
         if (!schedule) {
             return res.status(404).json({ message: 'Schedule not found' });
+        }
+
+        if (moment(schedule.weekStartDate).isBefore(moment().tz('Asia/Ho_Chi_Minh').startOf('week'))) {
+            return res.status(400).json({ message: 'Cannot delete schedule for a past week' });
         }
 
         const hasBookedSlots = schedule.availability.some(slot =>

@@ -15,7 +15,7 @@ const fontStyle = `
 function Appointment() {
   const { docId } = useParams();
   const navigate = useNavigate();
-  const { doctor, getDoctorData, backEndUrl, token, loadUserProfileData } = useContext(AppContext);
+  const { doctor, getDoctorData, backEndUrl, token, userData, loadUserProfileData } = useContext(AppContext);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [appointmentData, setAppointmentData] = useState({
@@ -32,18 +32,18 @@ function Appointment() {
       try {
         setIsLoading(true);
         const cleanDocId = docId?.trim();
-        console.log('[Appointment] Cleaned docId:', cleanDocId);
+        console.log('[Appointment] ID bác sĩ đã làm sạch:', cleanDocId);
         if (!cleanDocId || !cleanDocId.match(/^[0-9a-fA-F]{24}$/)) {
           throw new Error('ID bác sĩ không hợp lệ');
         }
         const doctorData = await getDoctorData(cleanDocId);
-        console.log('[Appointment] Fetched doctor data:', doctorData);
+        console.log('[Appointment] Dữ liệu bác sĩ đã lấy:', doctorData);
         if (!doctorData) {
           throw new Error('Không tìm thấy bác sĩ');
         }
         setIsLoading(false);
       } catch (err) {
-        console.error('[Appointment] Error fetching doctor data:', {
+        console.error('[Appointment] Lỗi khi lấy dữ liệu bác sĩ:', {
           message: err.message,
           response: err.response?.data,
           status: err.response?.status,
@@ -72,17 +72,25 @@ function Appointment() {
 
   // Log doctor state changes
   useEffect(() => {
-    console.log('[Appointment] Current doctor state:', doctor);
+    console.log('[Appointment] Trạng thái bác sĩ hiện tại:', doctor);
   }, [doctor]);
 
   // Fetch available slots
   useEffect(() => {
     const fetchAvailableSlots = async () => {
-      if (!appointmentData.appointmentDate || !token) {
+      if (!appointmentData.appointmentDate) {
         setAvailableSlots([]);
-        if (!token) {
-          setError('Vui lòng đăng nhập để xem khung giờ trống');
-        }
+        setError(null);
+        console.log('[Appointment] Không có ngày được chọn, bỏ qua lấy khung giờ');
+        return;
+      }
+      if (!token || !userData) {
+        setAvailableSlots([]);
+        setError('Vui lòng đăng nhập để xem khung giờ trống');
+        console.log('[Appointment] Thiếu token hoặc userData:', {
+          token: token ? '[PRESENT]' : '[MISSING]',
+          userData: userData ? '[PRESENT]' : '[MISSING]'
+        });
         return;
       }
       try {
@@ -92,20 +100,22 @@ function Appointment() {
           .tz('Asia/Ho_Chi_Minh')
           .format('YYYY-MM-DD');
         if (!moment(formattedDate, 'YYYY-MM-DD', true).isValid()) {
-          console.warn('[Appointment] Invalid date format:', formattedDate);
+          console.warn('[Appointment] Định dạng ngày không hợp lệ:', formattedDate);
           setError('Định dạng ngày không hợp lệ');
           return;
         }
-        console.log('[Appointment] Fetching slots for date:', formattedDate, 'doctorId:', docId);
-        console.log('[Appointment] Request URL:', `${backEndUrl}/patient/doctor/schedule/${docId}?date=${formattedDate}`);
+        console.log('[Appointment] Lấy khung giờ cho ngày:', formattedDate, 'doctorId:', docId);
+        console.log('[Appointment] URL yêu cầu:', `${backEndUrl}/patient/doctor/schedule/${docId}?date=${formattedDate}`);
+        console.log('[Appointment] Token gửi:', token ? '[PRESENT]' : '[MISSING]');
+        console.log('[Appointment] UserData:', userData ? { id: userData._id, email: userData.email } : '[MISSING]');
         const { data } = await axios.get(
           `${backEndUrl}/patient/doctor/schedule/${docId}?date=${formattedDate}`,
           {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            headers: { Authorization: `Bearer ${token}` },
             withCredentials: true,
           }
         );
-        console.log('[Appointment] Schedule API response:', data);
+        console.log('[Appointment] Phản hồi API lịch:', data);
         if (data.success && Array.isArray(data.data)) {
           setAvailableSlots(data.data);
           setError(null);
@@ -114,7 +124,7 @@ function Appointment() {
           setError(data.message || 'Không có khung giờ trống cho ngày này');
         }
       } catch (err) {
-        console.error('[Appointment] Error fetching time slots:', {
+        console.error('[Appointment] Lỗi khi lấy khung giờ:', {
           error: err.message,
           response: err.response?.data,
           status: err.response?.status,
@@ -122,7 +132,10 @@ function Appointment() {
         const message = err.response?.data?.message || 'Không thể tải khung giờ trống';
         setAvailableSlots([]);
         setError(message);
-        if (err.response?.status === 404) {
+        if (err.response?.status === 401) {
+          toast.error('Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.');
+          navigate('/login');
+        } else if (err.response?.status === 404) {
           toast.warn(message);
         } else {
           toast.error(message);
@@ -130,9 +143,13 @@ function Appointment() {
       }
     };
     if (doctor && appointmentData.appointmentDate) {
+      console.log('[Appointment] Kích hoạt fetchAvailableSlots với:', {
+        hasDoctor: !!doctor,
+        appointmentDate: appointmentData.appointmentDate
+      });
       fetchAvailableSlots();
     }
-  }, [appointmentData.appointmentDate, docId, backEndUrl, doctor, token]);
+  }, [appointmentData.appointmentDate, docId, backEndUrl, doctor, token, userData, navigate]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -145,8 +162,8 @@ function Appointment() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!token) {
-      console.log('[Appointment] No token found, redirecting to login');
+    if (!token || !userData) {
+      console.log('[Appointment] Thiếu token hoặc userData, chuyển hướng đến đăng nhập');
       toast.error('Vui lòng đăng nhập để đặt lịch hẹn');
       navigate('/login');
       return;
@@ -154,10 +171,10 @@ function Appointment() {
 
     // Validate token
     try {
-      console.log('[Appointment] Validating token before booking');
+      console.log('[Appointment] Xác thực token trước khi đặt lịch');
       await loadUserProfileData(true); // Force reload to validate token
     } catch (err) {
-      console.error('[Appointment] Token validation failed:', {
+      console.error('[Appointment] Xác thực token thất bại:', {
         message: err.message,
         response: err.response?.data,
         status: err.response?.status,
@@ -187,7 +204,7 @@ function Appointment() {
         timeslot: appointmentData.timeslot,
         notes: appointmentData.notes.trim() || undefined,
       };
-      console.log('[Appointment] Sending booking request:', payload);
+      console.log('[Appointment] Gửi yêu cầu đặt lịch:', payload);
       const response = await axios.post(
         `${backEndUrl}/patient/book-appointment`,
         payload,
@@ -196,7 +213,7 @@ function Appointment() {
           withCredentials: true,
         }
       );
-      console.log('[Appointment] Booking response:', response.data);
+      console.log('[Appointment] Phản hồi đặt lịch:', response.data);
       if (response.data.success) {
         toast.success('Đặt lịch hẹn thành công!');
         navigate('/my-appointments');
@@ -204,7 +221,7 @@ function Appointment() {
         toast.error(response.data.message || 'Lỗi khi đặt lịch hẹn');
       }
     } catch (err) {
-      console.error('[Appointment] Error booking appointment:', {
+      console.error('[Appointment] Lỗi khi đặt lịch hẹn:', {
         message: err.message,
         response: err.response?.data,
         status: err.response?.status,
@@ -239,7 +256,7 @@ function Appointment() {
               withCredentials: true,
             }
           );
-          console.log('[Appointment] Refreshed slots after error:', data);
+          console.log('[Appointment] Làm mới khung giờ sau lỗi:', data);
           if (data.success && Array.isArray(data.data)) {
             setAvailableSlots(data.data);
             setError(null);
@@ -248,7 +265,7 @@ function Appointment() {
             setError(data.message || 'Không có khung giờ trống cho ngày này');
           }
         } catch (refreshErr) {
-          console.error('[Appointment] Error refreshing slots:', refreshErr);
+          console.error('[Appointment] Lỗi khi làm mới khung giờ:', refreshErr);
           setAvailableSlots([]);
           setError('Không thể làm mới khung giờ trống');
         }
@@ -356,7 +373,7 @@ function Appointment() {
               </div>
             </div>
           </div>
-          <div className="md:w-1/2 bg white p-6 rounded-md shadow-lg">
+          <div className="md:w-1/2 bg-white p-6 rounded-md shadow-lg">
             <form onSubmit={handleSubmit}>
               <div className="mb-4">
                 <label className="block text-gray-700">Chọn ngày</label>

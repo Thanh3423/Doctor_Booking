@@ -37,16 +37,18 @@ const LoginPage = () => {
       const token = localStorage.getItem("token");
       if (token) {
         try {
-          console.log("[LoginPage] Checking token validity, backEndUrl:", backEndUrl);
-          await axios.get(`${backEndUrl}/patient/my-profile`, {
+          console.log("[LoginPage] Kiểm tra tính hợp lệ của token, backEndUrl:", backEndUrl);
+          const response = await axios.get(`${backEndUrl}/patient/my-profile`, {
             headers: { Authorization: `Bearer ${token}` },
             withCredentials: true,
           });
+          console.log("[LoginPage] Phản hồi kiểm tra token:", response.data);
+          setUserData(response.data.data); // Update userData in AppContext
           const redirectTo = location.state?.from || "/";
           navigate(redirectTo, { replace: true });
           toast.info("Bạn đã đăng nhập!");
         } catch (error) {
-          console.error("[LoginPage] Token invalid:", {
+          console.error("[LoginPage] Token không hợp lệ:", {
             status: error.response?.status,
             data: error.response?.data,
             message: error.message,
@@ -77,12 +79,12 @@ const LoginPage = () => {
     if (isRegister) data.name = name;
 
     try {
-      console.log("[LoginPage] Sending request to:", `${backEndUrl}${endpoint}`);
-      console.log("[LoginPage] Request data:", data);
+      console.log("[LoginPage] Gửi yêu cầu đến:", `${backEndUrl}${endpoint}`);
+      console.log("[LoginPage] Dữ liệu yêu cầu:", { ...data, password: '[HIDDEN]' });
       const res = await axios.post(`${backEndUrl}${endpoint}`, data, {
         withCredentials: true,
       });
-      console.log("[LoginPage] Response:", res.data);
+      console.log("[LoginPage] Phản hồi:", res.data);
       const { token, user } = res.data.data;
       localStorage.setItem("token", token);
       if (user) {
@@ -91,10 +93,11 @@ const LoginPage = () => {
       }
       setToken(token);
       const redirectTo = location.state?.from || "/";
+      console.log("[LoginPage] Chuyển hướng đến:", redirectTo);
       navigate(redirectTo, { replace: true });
       toast.success(isRegister ? "Đăng ký thành công!" : "Đăng nhập thành công!");
     } catch (error) {
-      console.error("[LoginPage] API error:", {
+      console.error("[LoginPage] Lỗi API:", {
         status: error.response?.status,
         data: error.response?.data,
         message: error.message,

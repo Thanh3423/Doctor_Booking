@@ -8,7 +8,7 @@ import Logo1 from '../assets/Logo/logo2.png';
 import MyProfile_Pic from '../assets/profile_pic/p1.webp';
 
 const Navbar = () => {
-  const { userData, backEndUrl, token } = useContext(AppContext);
+  const { userData, backEndUrl, token, setToken, setUserData } = useContext(AppContext);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -31,12 +31,12 @@ const Navbar = () => {
   // Normalize image URL
   const getImageUrl = (image) => {
     if (!image || !image.trim()) {
-      console.log('[Navbar getImageUrl] No image provided, using default');
+      console.log('[Navbar getImageUrl] Không có hình ảnh, sử dụng mặc định');
       return MyProfile_Pic;
     }
     // Check if image is already a full URL
     if (image.startsWith('http://') || image.startsWith('https://')) {
-      console.log('[Navbar getImageUrl] Image is full URL:', image);
+      console.log('[Navbar getImageUrl] Hình ảnh là URL đầy đủ:', image);
       return image;
     }
     const backendUrl = backEndUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
@@ -44,13 +44,13 @@ const Navbar = () => {
       .replace(/^\/?(?:public\/)?(?:[Uu]ploads\/)?(?:misc\/)?/, '') // Remove /public/, /Uploads/, /misc/
       .replace(/^\/+/, ''); // Remove leading slashes
     const url = `${backendUrl}/images/uploads/misc/${cleanPath}`;
-    console.log('[Navbar getImageUrl] Constructed URL:', url, 'from image:', image);
+    console.log('[Navbar getImageUrl] Đã tạo URL:', url, 'từ hình ảnh:', image);
     return url;
   };
 
   const handleLogout = async () => {
     try {
-      console.log('[Navbar handleLogout] Initiating logout');
+      console.log('[Navbar handleLogout] Bắt đầu đăng xuất');
       const response = await axios.post(
         `${backEndUrl}/patient/logout`,
         {},
@@ -63,20 +63,24 @@ const Navbar = () => {
         }
       );
 
-      console.log('[Navbar handleLogout] Response:', response.data);
+      console.log('[Navbar handleLogout] Phản hồi:', response.data);
       if (response.status === 200) {
         localStorage.clear();
+        setToken(''); // Clear token in AppContext
+        setUserData(null); // Clear userData in AppContext
         setIsLoggedIn(false);
         toast.success(response.data.message || 'Đăng xuất thành công');
         navigate('/home');
       }
     } catch (error) {
-      console.error('[Navbar handleLogout] Error:', {
+      console.error('[Navbar handleLogout] Lỗi:', {
         message: error.message,
         response: error.response?.data,
         status: error.response?.status,
       });
       localStorage.clear();
+      setToken(''); // Clear token even on error
+      setUserData(null); // Clear userData even on error
       setIsLoggedIn(false);
       const message =
         error.response?.status === 401
@@ -108,8 +112,8 @@ const Navbar = () => {
             <Link
               to={link.to}
               className={`py-1 px-2 transition font-medium ${isActive(link.to)
-                  ? 'text-blue-600 border-b-2 border-blue-500'
-                  : 'text-gray-700 hover:text-blue-500'
+                ? 'text-blue-600 border-b-2 border-blue-500'
+                : 'text-gray-700 hover:text-blue-500'
                 }`}
             >
               {link.label}
@@ -135,7 +139,7 @@ const Navbar = () => {
                 src={userData?.image ? getImageUrl(userData.image) : MyProfile_Pic}
                 alt="Hồ Sơ"
                 onError={(e) => {
-                  console.error('[Navbar img onError] Image load failed:', {
+                  console.error('[Navbar img onError] Tải hình ảnh thất bại:', {
                     originalUrl: userData?.image,
                     constructedUrl: getImageUrl(userData.image),
                     error: e.message,

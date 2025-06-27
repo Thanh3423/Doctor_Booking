@@ -358,14 +358,7 @@ const PatientsPage = () => {
       `}</style>
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold text-gray-800">Quản lý bệnh nhân</h1>
-                <button
-                    onClick={fetchPatients}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition"
-                    disabled={isLoading}
-                >
-                    <RefreshCw size={18} className={isLoading ? "animate-spin" : ""} />
-                    Làm mới danh sách
-                </button>
+
             </div>
 
             {/* Search Bar */}

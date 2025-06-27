@@ -91,7 +91,7 @@ const getAllSchedules = async (req, res) => {
         res.status(200).json({ success: true, data: schedules });
     } catch (error) {
         console.error('[getAllSchedules] Error fetching schedules:', error);
-        res.status(500).json({ message: 'Lỗi server khi lấy lịch', error: error.message });
+        res.status(500).json({ message: 'Lỗi server khi lấy danh sách lịch', error: error.message });
     }
 };
 
@@ -99,18 +99,18 @@ const getScheduleById = async (req, res) => {
     try {
         const { id } = req.params;
         if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({ message: 'Invalid schedule ID' });
+            return res.status(400).json({ message: 'ID lịch không hợp lệ' });
         }
         const schedule = await scheduleModel
             .findById(id)
             .populate('doctorId', 'name email');
         if (!schedule) {
-            return res.status(404).json({ message: 'Schedule not found' });
+            return res.status(404).json({ message: 'Không tìm thấy lịch' });
         }
         res.status(200).json({ success: true, data: schedule });
     } catch (error) {
-        console.error('Error fetching schedule:', error);
-        res.status(500).json({ message: 'Server error', error: error.message });
+        console.error('Lỗi khi lấy thông tin lịch:', error);
+        res.status(500).json({ message: 'Lỗi server khi lấy thông tin lịch', error: error.message });
     }
 };
 
@@ -118,18 +118,18 @@ const createSchedule = async (req, res) => {
     try {
         const { doctorId, weekStartDate, availability } = req.body;
         if (!doctorId || !weekStartDate || !availability || !Array.isArray(availability)) {
-            return res.status(400).json({ message: 'Doctor ID, week start date, and availability are required' });
+            return res.status(400).json({ message: 'ID bác sĩ, ngày bắt đầu tuần và thông tin lịch trống là bắt buộc' });
         }
 
         const doctor = await doctorModel.findById(doctorId);
         if (!doctor) {
-            return res.status(404).json({ message: 'Doctor not found' });
+            return res.status(404).json({ message: 'Không tìm thấy bác sĩ' });
         }
 
         const startDate = moment.tz(weekStartDate, 'Asia/Ho_Chi_Minh').startOf('week').startOf('day').toDate();
         const currentDate = moment.tz('Asia/Ho_Chi_Minh').startOf('day').toDate();
         if (moment(startDate).isBefore(moment().tz('Asia/Ho_Chi_Minh').startOf('week'))) {
-            return res.status(400).json({ message: 'Cannot create schedule for a past week' });
+            return res.status(400).json({ message: 'Không thể tạo lịch cho tuần đã qua' });
         }
 
         const weekNumber = moment.tz(startDate, 'Asia/Ho_Chi_Minh').week();
@@ -137,7 +137,7 @@ const createSchedule = async (req, res) => {
 
         const existingSchedule = await scheduleModel.findOne({ doctorId, weekStartDate: startDate });
         if (existingSchedule) {
-            return res.status(400).json({ message: 'Schedule already exists for this doctor and week' });
+            return res.status(400).json({ message: 'Lịch đã tồn tại cho bác sĩ và tuần này' });
         }
 
         const validDays = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
@@ -156,7 +156,7 @@ const createSchedule = async (req, res) => {
             const actualDay = moment.tz(slot.date, 'Asia/Ho_Chi_Minh').format('dddd');
             const isPastDay = moment.tz(slot.date, 'Asia/Ho_Chi_Minh').isBefore(currentDate, 'day');
             if (isPastDay && slot.isAvailable) {
-                return false; // Prevent enabling availability for past days
+                return false; // Ngăn bật isAvailable cho ngày đã qua
             }
             return (
                 validDays.includes(slot.day) &&
@@ -173,7 +173,7 @@ const createSchedule = async (req, res) => {
         });
 
         if (!isValidAvailability) {
-            return res.status(400).json({ message: 'Invalid availability format, day-date mismatch, or attempting to enable past days' });
+            return res.status(400).json({ message: 'Định dạng lịch trống không hợp lệ, ngày không khớp hoặc cố gắng kích hoạt ngày đã qua' });
         }
 
         const newSchedule = new scheduleModel({
@@ -199,10 +199,10 @@ const createSchedule = async (req, res) => {
             .findById(newSchedule._id)
             .populate('doctorId', 'name email');
 
-        res.status(201).json({ message: 'Schedule created successfully', schedule: populatedSchedule });
+        res.status(201).json({ message: 'Tạo lịch thành công', schedule: populatedSchedule });
     } catch (error) {
-        console.error('Error creating schedule:', error);
-        res.status(500).json({ message: 'Server error', error: error.message });
+        console.error('Lỗi khi tạo lịch:', error);
+        res.status(500).json({ message: 'Lỗi server khi tạo lịch', error: error.message });
     }
 };
 
@@ -212,22 +212,22 @@ const updateSchedule = async (req, res) => {
         const { weekStartDate, availability } = req.body;
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({ message: 'Invalid schedule ID' });
+            return res.status(400).json({ message: 'ID lịch không hợp lệ' });
         }
 
         if (!weekStartDate || !availability || !Array.isArray(availability)) {
-            return res.status(400).json({ message: 'Week start date and availability are required' });
+            return res.status(400).json({ message: 'Ngày bắt đầu tuần và thông tin lịch trống là bắt buộc' });
         }
 
         const schedule = await scheduleModel.findById(id).populate('doctorId', 'name email');
         if (!schedule) {
-            return res.status(404).json({ message: 'Schedule not found' });
+            return res.status(404).json({ message: 'Không tìm thấy lịch' });
         }
 
         const startDate = moment.tz(weekStartDate, 'Asia/Ho_Chi_Minh').startOf('week').startOf('day').toDate();
         const currentDate = moment.tz('Asia/Ho_Chi_Minh').startOf('day').toDate();
         if (moment(startDate).isBefore(moment().tz('Asia/Ho_Chi_Minh').startOf('week'))) {
-            return res.status(400).json({ message: 'Cannot update schedule for a past week' });
+            return res.status(400).json({ message: 'Không thể cập nhật lịch cho tuần đã qua' });
         }
 
         const weekNumber = moment.tz(startDate, 'Asia/Ho_Chi_Minh').week();
@@ -266,7 +266,7 @@ const updateSchedule = async (req, res) => {
         });
 
         if (!isValidAvailability) {
-            return res.status(400).json({ message: 'Invalid availability format, day-date mismatch, or attempting to enable past days' });
+            return res.status(400).json({ message: 'Định dạng lịch trống không hợp lệ, ngày không khớp hoặc cố gắng kích hoạt ngày đã qua' });
         }
 
         // Collect existing booked slots
@@ -371,10 +371,10 @@ const updateSchedule = async (req, res) => {
             .findById(schedule._id)
             .populate('doctorId', 'name email');
 
-        res.status(200).json({ message: 'Schedule updated successfully', schedule: populatedSchedule });
+        res.status(200).json({ message: 'Cập nhật lịch thành công', schedule: populatedSchedule });
     } catch (error) {
-        console.error('Error updating schedule:', error);
-        res.status(500).json({ message: 'Server error', error: error.message });
+        console.error('Lỗi khi cập nhật lịch:', error);
+        res.status(500).json({ message: 'Lỗi server khi cập nhật lịch', error: error.message });
     }
 };
 
@@ -382,23 +382,23 @@ const deleteSchedule = async (req, res) => {
     try {
         const { id } = req.params;
         if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({ message: 'Invalid schedule ID' });
+            return res.status(400).json({ message: 'ID lịch không hợp lệ' });
         }
 
         const schedule = await scheduleModel.findById(id).populate('doctorId', 'name email');
         if (!schedule) {
-            return res.status(404).json({ message: 'Schedule not found' });
+            return res.status(404).json({ message: 'Không tìm thấy lịch' });
         }
 
         if (moment(schedule.weekStartDate).isBefore(moment().tz('Asia/Ho_Chi_Minh').startOf('week'))) {
-            return res.status(400).json({ message: 'Cannot delete schedule for a past week' });
+            return res.status(400).json({ message: 'Không thể xóa lịch cho tuần đã qua' });
         }
 
         const hasBookedSlots = schedule.availability.some(slot =>
             slot.timeSlots.some(ts => ts.isBooked)
         );
         if (hasBookedSlots) {
-            return res.status(400).json({ message: 'Cannot delete schedule with booked time slots' });
+            return res.status(400).json({ message: 'Không thể xóa lịch vì có khung giờ đã đặt' });
         }
 
         const conflictingAppointments = await appointmentModel.find({
@@ -410,14 +410,14 @@ const deleteSchedule = async (req, res) => {
         });
 
         if (conflictingAppointments.length > 0) {
-            return res.status(400).json({ message: 'Cannot delete schedule due to existing appointments in this week' });
+            return res.status(400).json({ message: 'Không thể xóa lịch do có lịch hẹn hiện tại trong tuần này' });
         }
 
         await scheduleModel.findByIdAndDelete(id);
-        res.status(200).json({ message: 'Schedule deleted successfully' });
+        res.status(200).json({ message: 'Xóa lịch thành công' });
     } catch (error) {
-        console.error('Error deleting schedule:', error);
-        res.status(500).json({ message: 'Server error', error: error.message });
+        console.error('Lỗi khi xóa lịch:', error);
+        res.status(500).json({ message: 'Lỗi server khi xóa lịch', error: error.message });
     }
 };
 
@@ -450,7 +450,7 @@ const getAllAppointments = async (req, res) => {
             })),
         });
     } catch (error) {
-        console.error('Error fetching appointments:', error);
+        console.error('Lỗi khi lấy danh sách lịch hẹn:', error);
         res.status(500).json({ success: false, message: 'Lỗi server khi lấy danh sách lịch hẹn', error: error.message });
     }
 };
@@ -754,8 +754,8 @@ const getAllDoctors = async (req, res) => {
         }));
         res.status(200).json({ success: true, data: doctorsWithFullImageUrl });
     } catch (error) {
-        console.error('Error fetching doctors:', error);
-        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+        console.error('Lỗi khi lấy danh sách bác sĩ:', error);
+        res.status(500).json({ message: 'Lỗi server khi lấy danh sách bác sĩ', error: error.message });
     }
 };
 
@@ -778,7 +778,7 @@ const getAllPatients = async (req, res) => {
         });
         res.status(200).json({ success: true, data: patients });
     } catch (error) {
-        console.error('Error fetching all patients:', error);
+        console.error('Lỗi khi lấy danh sách bệnh nhân:', error);
         res.status(500).json({ message: 'Lỗi server khi lấy danh sách bệnh nhân', error: error.message });
     }
 };
@@ -833,7 +833,7 @@ const getPatientById = async (req, res) => {
             },
         });
     } catch (error) {
-        console.error('Error fetching patient by ID:', error);
+        console.error('Lỗi khi lấy thông tin bệnh nhân:', error);
         res.status(500).json({ message: 'Lỗi server khi lấy thông tin bệnh nhân', error: error.message });
     }
 };
@@ -987,7 +987,7 @@ const updateSpecialty = async (req, res) => {
 
         const specialty = await specialtyModel.findById(id);
         if (!specialty) {
-            return res.status(404).json({ message: 'Chuyên khoa không tồn tại' });
+            return res.status(404).json({ message: 'Không tìm thấy chuyên khoa' });
         }
 
         let imagePath = existingImage || specialty.image;
@@ -1009,11 +1009,11 @@ const updateSpecialty = async (req, res) => {
 
         res.status(200).json({ message: 'Cập nhật chuyên khoa thành công', specialty });
     } catch (error) {
-        console.error('Error updating specialty:', error);
+        console.error('Lỗi khi cập nhật chuyên khoa:', error);
         if (error.code === 11000) {
             return res.status(400).json({ message: 'Tên chuyên khoa đã tồn tại' });
         }
-        res.status(500).json({ message: 'Lỗi khi cập nhật chuyên khoa', error: error.message });
+        res.status(500).json({ message: 'Lỗi server khi cập nhật chuyên khoa', error: error.message });
     }
 };
 

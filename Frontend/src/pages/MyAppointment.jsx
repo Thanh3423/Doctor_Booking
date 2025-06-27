@@ -29,7 +29,7 @@ const MyAppointments = () => {
   // Helper function to construct image URL
   const getImageUrl = (imagePath) => {
     if (!imagePath || !imagePath.trim()) {
-      console.log('[getImageUrl] No image path provided, returning null');
+      console.log('[getImageUrl] Không có đường dẫn hình ảnh, trả về null');
       return null;
     }
     const cleanPath = imagePath.replace(/^\/?(?:images\/)?(?:uploads\/)?(?:doctors\/)?/, '');
@@ -252,10 +252,32 @@ const MyAppointments = () => {
     if (appointments.length > 0) {
       const current = moment.tz('Asia/Ho_Chi_Minh');
       setUpcomingAppointments(
-        appointments.filter((appt) => moment.tz(appt.appointmentDate, 'Asia/Ho_Chi_Minh') >= current)
+        appointments.filter((appt) => {
+          try {
+            const [startTime] = appt.timeslot.split('-');
+            const [hours, minutes] = startTime.split(':').map(Number);
+            const apptDateTime = moment.tz(appt.appointmentDate, 'Asia/Ho_Chi_Minh')
+              .set({ hour: hours, minute: minutes, second: 0, millisecond: 0 });
+            return apptDateTime >= current;
+          } catch (error) {
+            console.warn('[useEffect] Error parsing appointment time:', { appointment: appt, error: error.message });
+            return false; // Treat invalid times as past to avoid errors
+          }
+        })
       );
       setPastAppointments(
-        appointments.filter((appt) => moment.tz(appt.appointmentDate, 'Asia/Ho_Chi_Minh') < current)
+        appointments.filter((appt) => {
+          try {
+            const [startTime] = appt.timeslot.split('-');
+            const [hours, minutes] = startTime.split(':').map(Number);
+            const apptDateTime = moment.tz(appt.appointmentDate, 'Asia/Ho_Chi_Minh')
+              .set({ hour: hours, minute: minutes, second: 0, millisecond: 0 });
+            return apptDateTime < current;
+          } catch (error) {
+            console.warn('[useEffect] Error parsing appointment time:', { appointment: appt, error: error.message });
+            return true; // Treat invalid times as past
+          }
+        })
       );
       setCurrentPage(1);
     }
@@ -363,13 +385,13 @@ const MyAppointments = () => {
                   <div className="flex flex-col gap-3 items-end">
                     <span
                       className={`text-sm font-medium px-3 py-1 rounded-full ${appt.status === 'cancelled'
-                          ? 'bg-red-100 text-red-700'
-                          : appt.status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-700'
-                            : 'bg-green-100 text-green-700'
+                        ? 'bg-red-100 text-red-700'
+                        : appt.status === 'pending'
+                          ? 'bg-yellow-100 text-yellow-700'
+                          : 'bg-green-100 text-green-700'
                         }`}
                     >
-                      {appt.status === 'cancelled' ? 'Đã hủy' : appt.status === 'pending' ? 'Chờ xác nhận' : 'Hoàn thành'}
+                      {appt.status === 'cancelled' ? 'Đã hủy' : appt.status === 'pending' ? 'Đang chờ' : 'Hoàn thành'}
                     </span>
                     {appt.status === 'pending' && (
                       <button
@@ -379,8 +401,8 @@ const MyAppointments = () => {
                         }}
                         disabled={isWithinOneHour(appt.appointmentDate, appt.timeslot)}
                         className={`px-4 py-2 text-sm rounded-md transition-all duration-200 ${isWithinOneHour(appt.appointmentDate, appt.timeslot)
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                            : 'bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-200'
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : 'bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-200'
                           }`}
                         title={
                           isWithinOneHour(appt.appointmentDate, appt.timeslot)
@@ -416,10 +438,10 @@ const MyAppointments = () => {
                     onClick={() => handlePageChange(page)}
                     disabled={page === '...' || page === currentPage}
                     className={`px-4 py-2 text-sm rounded-md transition-all duration-200 ${page === currentPage
-                        ? 'bg-blue-600 text-white'
-                        : page === '...'
-                          ? 'text-gray-500 cursor-default'
-                          : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-600'
+                      ? 'bg-blue-600 text-white'
+                      : page === '...'
+                        ? 'text-gray-500 cursor-default'
+                        : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-600'
                       }`}
                   >
                     {page}
